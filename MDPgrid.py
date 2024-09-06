@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle, Arrow
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import Rectangle, Arrow # noqa: F401
+from matplotlib.colors import LinearSegmentedColormap # noqa: F401
 import matplotlib.patches as patches
 from functools import lru_cache
 from collections import deque

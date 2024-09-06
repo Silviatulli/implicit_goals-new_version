@@ -7,18 +7,19 @@ from queryMDP import optimal_query_strategy, update_robot_policy
 from robot_models import generate_diverse_gridworlds
 import time
 
-num_models = 5
+num_models = 20
 num_runs = 5
 
 def run_experiments(num_runs=num_runs, num_models=num_models):
-    grid_sizes = [(5, 5)]
+    grid_sizes = [(4, 4), (5, 5)]
     results = {}
 
     environments = [("GridWorldMDP", generate_human_models)]
     for env_name, env_generator in environments:
         env_results = {}
         for grid_size in grid_sizes:
-            query_costs, query_counts, times, human_bottlenecks, query_time_ab, query_counts_ab = [], [], [], [], [], []
+            #query_costs, query_counts, times, human_bottlenecks, query_time_ab, query_counts_ab = [], [], [], [], [], []
+            query_costs, query_counts, times, human_bottlenecks = [], [], [], []
             generation_times, bottleneck_times, query_times = [], [], []
             for _ in range(num_runs):
                 start_time_total = time.time()
@@ -66,12 +67,14 @@ def run_experiments(num_runs=num_runs, num_models=num_models):
                     times.append(time.time() - start_time_total)
 
                     # Ablation study: remove robot bottlenecks
+                    '''
                     start_time_ab = time.time()
                     ablation_queried_bottlenecks, _ = optimal_query_strategy(robot_det_mdp, 
                                                                              [b for b in all_human_bottlenecks], 
                                                                              [])
                     query_counts_ab.append(len(ablation_queried_bottlenecks))
                     query_time_ab.append(time.time() - start_time_ab)
+                    '''
 
             env_results[grid_size] = {
                 "Query Count": f"{np.mean(query_counts):.2f} ± {np.std(query_counts):.2f}",
@@ -81,8 +84,8 @@ def run_experiments(num_runs=num_runs, num_models=num_models):
                 "MDP Generation Time (secs)": f"{np.mean(generation_times):.2f} ± {np.std(generation_times):.2f}",
                 "Bottleneck Finding Time (secs)": f"{np.mean(bottleneck_times):.2f} ± {np.std(bottleneck_times):.2f}",
                 "Query Strategy Time (secs)": f"{np.mean(query_times):.2f} ± {np.std(query_times):.2f}",
-                "Query Count (Ablation)": f"{np.mean(query_counts_ab):.2f} ± {np.std(query_counts_ab):.2f}",
-                "Time (Ablation) (secs)": f"{np.mean(query_time_ab):.2f} ± {np.std(query_time_ab):.2f}",
+                #"Query Count (Ablation)": f"{np.mean(query_counts_ab):.2f} ± {np.std(query_counts_ab):.2f}",
+                #"Time (Ablation) (secs)": f"{np.mean(query_time_ab):.2f} ± {np.std(query_time_ab):.2f}",
             }
         
         results[env_name] = env_results
