@@ -1,11 +1,12 @@
+from MDP import MDP
 import numpy as np
 from Search import BFSearch
-from collections import combinations
 from Utils import powerset
-class GridWorld(object):
+class GridWorld(MDP):
     def __init__(self, size=5, start=None, goal=None,  obstacles_percent=0.1,
-                 divide_rooms=False, room_count=4, agent_features=None, locatables=None,
-                 locatable_locations=None, slip_prob=0.1):
+                 divide_rooms=False, room_count=4, agent_features=[], locatables=[],
+                 locatable_locations=[], slip_prob=0.1, discount=0.99, max_tries=100, obstacle_seed=1,
+                 starting_features=[]):
         self.size = size
         self.start_pos = start
         self.goal_pos = goal
@@ -19,6 +20,7 @@ class GridWorld(object):
         self.locatables = locatables
         self.locatable_locations = locatable_locations
         self.slip_prob = slip_prob
+        self.reward_func = self.goal_reward_func
         #self.stay_prob = stay_prob
 
         # Prepare map
@@ -27,9 +29,34 @@ class GridWorld(object):
         # rooted at top left corner - i.e. (0,0) is top left corner
         self.map = np.zeros((size, size))
         self.state_space = None
+        self.discount = discount
+        self.obstacle_seed = obstacle_seed
+
+        valid_config_found = False
+        max_tries = 100
+        curr_tries = 0
+        while not valid_config_found and curr_tries < max_tries:
+            self.place_random_obstacles()
+            self.divide_into_rooms()
+            self.place_start_and_goal()
+            path_found = self.check_for_path()
+            if path_found:
+                valid_config_found = True
+            else:
+                curr_tries += 1
+
+        if not valid_config_found:
+            print("Could not find a valid configuration after ", max_tries, " tries.")
+            print("Creating a default empty grid world.")
+            self.map = np.zeros((size, size))
+            self.place_start_and_goal()
+
+        self.create_state_space()
+        self.start_features = starting_features
 
     def place_random_obstacles(self):
         self.state_space = None
+        np.random.seed(self.obstacle_seed)
         total_obstacles = int(self.size * self.size * self.obstacles_percent)
         for i in range(total_obstacles):
             x = np.random.randint(self.size)
@@ -62,7 +89,7 @@ class GridWorld(object):
             self.goal_pos = (np.random.randint(self.size), np.random.randint(self.size))
 
 
-    def return_all_neighbors(self, node):
+    def get_all_neighbors(self, node):
         x, y = node[0]
         neighbors = []
         if x > 0:
@@ -87,14 +114,14 @@ class GridWorld(object):
         if self.start_pos is None or self.goal_pos is None:
            print("Start or goal not set.")
            return False
-        path = BFSearch(self.start_pos, self.check_goal_reached, self.return_all_neighbors)
+        path = BFSearch(self.start_pos, self.check_goal_reached, self.get_all_neighbors)
         if path is None:
             print("No path found.")
             return False
         return True
 
 
-    def return_actions(self):
+    def get_actions(self):
         return ["up", "down", "left", "right"]
 
     def create_state_space(self):
@@ -109,12 +136,12 @@ class GridWorld(object):
                                 current_state.append(agent_feature_set)
                                 current_state.append(locatable_set)
                 self.state_space.append(current_state)
-    def return_state_space(self):
+    def get_state_space(self):
         if self.state_space is None:
             self.create_state_space()
         return self.state_space
 
-    def return_transition_probabilities_for_move(self, state, action, state_prime):
+    def get_transition_probability_for_move(self, state, action, state_prime):
         # If current state is an obstacle, then the agent stays in the same state
         if self.map[state[0]] == -1:
             if state == state_prime:
@@ -128,9 +155,9 @@ class GridWorld(object):
         x, y = state[0]
         x_prime, y_prime = state_prime[0]
         # It can't move more than one step
-        if x_prime != x-1 or x_prime != x or x_prime != x+1:
+        if x_prime != x-1 and x_prime != x and x_prime != x+1:
             return 0
-        if y_prime != y-1 or y_prime != y or y_prime != y+1:
+        if y_prime != y-1 and y_prime != y and y_prime != y+1:
             return 0
         if action == "up":
             if x_prime == x-1 and y_prime == y:
@@ -154,10 +181,20 @@ class GridWorld(object):
                 return self.slip_prob
         assert False, "Should never reach here."
 
-    def return_transition_probabilities(self, state, action, state_prime):
-        return self.return_transition_probabilities_for_move(state, action, state_prime)
+    def get_transition_probability(self, state, action, state_prime):
+        return self.get_transition_probability_for_move(state, action, state_prime)
 
+    def goal_reward_func(self, state, action, next_state):
+        if self.check_goal_reached(next_state[0]):
+            return 1
+        return 0
 
+    def get_reward(self, state, action, next_state):
+        return self.reward_func(state, action, next_state)
+
+    def get_init_state(self):
+        start_state = [self.start_pos, tuple(self.start_features), tuple(self.locatables)]
+        return start_state
 
     def visualize(self):
         print(self.map)
@@ -165,15 +202,13 @@ class GridWorld(object):
 
 
 
+
+
 if __name__ == "__main__":
     grid = GridWorld(start=(0,0), goal=(4, 4))
-    grid.place_random_obstacles()
     grid.visualize()
-    grid.divide_into_rooms()
-    grid.visualize()
-    grid.place_start_and_goal()
-    path_found = grid.check_for_path()
-    print("Path found: ", path_found)
+    print(grid.get_init_state())
+    print(grid.get_transition_probability([(0,0),(),()], 'down', [(1,0),(),()]))
 
 
 
