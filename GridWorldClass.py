@@ -1,7 +1,7 @@
 from MDP import MDP
 import numpy as np
 from Search import BFSearch
-from Utils import powerset
+from Utils import powerset, ValueIteration
 class GridWorld(MDP):
     def __init__(self, size=5, start=None, goal=None,  obstacles_percent=0.1,
                  divide_rooms=False, room_count=4, agent_features=[], locatables=[],
@@ -37,7 +37,8 @@ class GridWorld(MDP):
         curr_tries = 0
         while not valid_config_found and curr_tries < max_tries:
             self.place_random_obstacles()
-            self.divide_into_rooms()
+            if self.divide_rooms:
+                self.divide_into_rooms()
             self.place_start_and_goal()
             path_found = self.check_for_path()
             if path_found:
@@ -53,6 +54,7 @@ class GridWorld(MDP):
 
         self.create_state_space()
         self.start_features = starting_features
+        assert slip_prob >= 0 and slip_prob*3 <= 1, "Slip probability should be between 0 and shouldn't add upto more than one."
 
     def place_random_obstacles(self):
         self.state_space = None
@@ -152,42 +154,122 @@ class GridWorld(MDP):
         if self.map[state_prime[0]] == -1:
             return 0
 
+        # Make goal state absorbing state
+        if self.check_goal_reached(state):
+            if state == state_prime:
+                return 1
+            else:
+                return 0
+
         x, y = state[0]
         x_prime, y_prime = state_prime[0]
-        # It can't move more than one step
-        if x_prime != x-1 and x_prime != x and x_prime != x+1:
+        # It can't move more than one step in one of the cardinal directions or is at the same cell
+        if (x_prime, y_prime) not in [(x-1, y), (x+1, y), (x, y-1), (x, y+1), (x, y)]:
             return 0
-        if y_prime != y-1 and y_prime != y and y_prime != y+1:
-            return 0
+
+        # count free spaces
+        up_free = False
+        down_free = False
+        left_free = False
+        right_free = False
+        if x-1 >= 0 and self.map[x-1, y] != -1:
+            up_free = True
+        if x+1 < self.size and self.map[x+1, y] != -1:
+            down_free = True
+        if  y-1 >= 0 and self.map[x, y-1] != -1:
+            left_free = True
+        if y+1 < self.size and self.map[x, y+1] != -1:
+            right_free = True
         if action == "up":
-            if x_prime == x-1 and y_prime == y:
-                return (1-self.slip_prob)
+            total_prob = 1
+            if down_free:
+                total_prob += 1
+            if left_free:
+                total_prob += 1
+            if right_free:
+                total_prob += 1
+            if up_free:
+                # Remaining probability is distributed among the other actions
+                if x_prime == x-1 and y_prime == y:
+                    return (1- total_prob * self.slip_prob)
+                else:
+                    return self.slip_prob
             else:
-                return self.slip_prob
+                # distribute the probability among the other actions
+                # with the highest probability to staying at the same state
+                if x_prime == x and y_prime == y:
+                    return (1- ((total_prob-1) * self.slip_prob))
+                else:
+                    return self.slip_prob
         elif action == "down":
-            if x_prime == x+1 and y_prime == y:
-                return (1-self.slip_prob)
+            total_prob = 1
+            if up_free:
+                total_prob += 1
+            if left_free:
+                total_prob += 1
+            if right_free:
+                total_prob += 1
+
+            if down_free:
+                if x_prime == x+1 and y_prime == y:
+                    return (1- total_prob * self.slip_prob)
+                else:
+                    return self.slip_prob
             else:
-                return self.slip_prob
+                if x_prime == x and y_prime == y:
+                    return (1- ((total_prob-1) * self.slip_prob))
+                else:
+                    return self.slip_prob
         elif action == "left":
-            if x_prime == x and y_prime == y-1:
-                return (1-self.slip_prob)
+            total_prob = 1
+            if up_free:
+                total_prob += 1
+            if down_free:
+                total_prob += 1
+            if right_free:
+                total_prob += 1
+            if left_free:
+                if x_prime == x and y_prime == y-1:
+                    return (1- total_prob * self.slip_prob)
+                else:
+                    return self.slip_prob
             else:
-                return self.slip_prob
+                if x_prime == x and y_prime == y:
+                    return (1- ((total_prob-1) * self.slip_prob))
+                else:
+                    return self.slip_prob
         elif action == "right":
-            if x_prime == x and y_prime == y+1:
-                return (1-self.slip_prob)
+            total_prob = 1
+            if up_free:
+                total_prob += 1
+            if down_free:
+                total_prob += 1
+            if left_free:
+                total_prob += 1
+            if right_free:
+                if x_prime == x and y_prime == y+1:
+                    return (1- total_prob * self.slip_prob)
+                else:
+                    return self.slip_prob
             else:
-                return self.slip_prob
+                if x_prime == x and y_prime == y:
+                    return (1- ((total_prob-1) * self.slip_prob))
+                else:
+                    return self.slip_prob
         assert False, "Should never reach here."
 
     def get_transition_probability(self, state, action, state_prime):
         return self.get_transition_probability_for_move(state, action, state_prime)
 
     def goal_reward_func(self, state, action, next_state):
-        if self.check_goal_reached(next_state[0]):
+        #print("next_state: ", next_state, type(next_state))
+        # Only reward for reaching the goal state from a non-goal state
+        if self.check_goal_reached(next_state) and not self.check_goal_reached(state):
             return 1
         return 0
+
+    def get_state_hash(self, state):
+        return str(state)
 
     def get_reward(self, state, action, next_state):
         return self.reward_func(state, action, next_state)
@@ -199,16 +281,21 @@ class GridWorld(MDP):
     def visualize(self):
         print(self.map)
 
+    def get_goal_states(self):
+        return [[self.goal_pos, tuple(self.start_features), tuple(self.locatables)]]
+
 
 
 
 
 
 if __name__ == "__main__":
-    grid = GridWorld(start=(0,0), goal=(4, 4))
+    grid = GridWorld(start=(0,0), goal=(1, 1), size=2, obstacles_percent=0, discount=0.99)
     grid.visualize()
     print(grid.get_init_state())
-    print(grid.get_transition_probability([(0,0),(),()], 'down', [(1,0),(),()]))
+    #print(grid.get_transition_probability([(1,1),(),()], 'down', [(2,1),(),()]))
+    V = ValueIteration(grid)
+    print(V)
 
 
 

@@ -14,3 +14,8 @@ class MDP(object):
     def get_init_state(self):
         return self.init_state
 
+    def get_state_hash(self, state):
+        return str(state)
+
+    def get_goal_states(self):
+        return []

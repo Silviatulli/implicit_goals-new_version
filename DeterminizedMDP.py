@@ -1,6 +1,7 @@
 from MDP import MDP
 from collections import defaultdict
 from GridWorldClass import GridWorld
+from Utils import ValueIteration
 class DeterminizedMDP(MDP):
     def __init__(self, mdp):
         self.mdp = mdp
@@ -9,8 +10,11 @@ class DeterminizedMDP(MDP):
         self.actions = []
         self.transition_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
         self.create_determinized_transition_matrix()
-        self.init_state = mdp.get_init_state()
+        self.init_state = self.get_state_hash(mdp.get_init_state())
         self.reward_func = mdp.reward_func
+        self.original_reward_func = mdp.reward_func
+        self.goal_states = [self.get_state_hash(state) for state in mdp.get_goal_states()]
+        self.discount = mdp.discount
     def create_determinized_transition_matrix(self):
         all_states = self.state_space
         action_prefix = 'act_'
@@ -30,6 +34,7 @@ class DeterminizedMDP(MDP):
 
 
     def get_state_hash(self, state):
+        # TODO: Assumption the function is idempotent
         return str(state)
     def get_actions(self):
         return self.actions
@@ -48,23 +53,28 @@ class DeterminizedMDP(MDP):
     def get_state_space(self):
         return self.state_space
 
+    def bottleneck_reward(self, state, action, next_state):
+        if self.get_state_hash(next_state) == self.get_state_hash(self.bottleneck_state):
+            return -1000
+        if self.get_state_hash(next_state) in self.goal_states and self.get_state_hash(state) not in self.goal_states:
+            return 1
+        return 0
+
 
 if __name__ == "__main__":
-    grid = GridWorld(start=(0,0), goal=(4, 4))
+    grid = GridWorld(start=(0,0), goal=(4, 4), divide_rooms=True)
+    grid.visualize()
     det_mdp = DeterminizedMDP(grid)
     print(det_mdp.get_actions())
     # print(det_mdp.get_transition_probability(((0,0),), 'act_0', ((0,0),)))
     # print(det_mdp.get_reward(((0,0),), 'act_0', ((0,0),)))
     print(det_mdp.get_init_state())
-    print(det_mdp.get_state_space())
     init_state_hash = det_mdp.get_state_hash(det_mdp.get_init_state())
-    next_state_hash = det_mdp.get_state_hash([(0,0),(),()])
-    print(det_mdp.transition_dict[init_state_hash]['act_0'][next_state_hash])
-    # print(det_mdp.get_transition_probability(((0,0),), 'act_0', ((0,1),)))
-    # print(det_mdp.get_reward(((0,0),), 'act_0', ((0,1),)))
-    # print(det_mdp.get_transition_probability(((0,0),), 'act_0', ((1,0),)))
-    # print(det_mdp.get_reward(((0,0),), 'act_0', ((1,0),)))
-    # print(det_mdp.get_transition_probability(((0,0),), 'act_0', ((1,1),)))
-    # print(det_mdp.get_reward(((0,0),), 'act_0', ((1,1),)))
-    # print(det_mdp.get_transition_probability(((0,0),), 'act_0', ((1,1),)))
-    # print(det_mdp.get_reward(((0,0),), 'act_0', ((1,1),)))
+    det_mdp.reward_func = det_mdp.bottleneck_reward
+    bottleneck_list = []
+    for state in det_mdp.get_state_space():
+        det_mdp.bottleneck_state = det_mdp.get_state_hash(state)
+        V = ValueIteration(det_mdp)
+        if V[init_state_hash] <= 0:
+            bottleneck_list.append(state)
+    print(bottleneck_list)
