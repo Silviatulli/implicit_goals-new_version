@@ -33,37 +33,51 @@ class GridWorld(MDP):
         self.obstacle_seed = obstacle_seed
 
         valid_config_found = False
-        max_tries = 100
         curr_tries = 0
         while not valid_config_found and curr_tries < max_tries:
+            self.map = np.zeros((size, size))
             self.place_random_obstacles()
             if self.divide_rooms:
                 self.divide_into_rooms()
             self.place_start_and_goal()
+            
+            print(f"\nAttempt {curr_tries + 1}:")
+            visualize_grid(self)
+            print(f"Start: {self.start_pos}, Goal: {self.goal_pos}")
+            
             path_found = self.check_for_path()
             if path_found:
                 valid_config_found = True
+                print("Valid configuration found!")
             else:
+                print("No path found.")
                 curr_tries += 1
 
         if not valid_config_found:
-            print("Could not find a valid configuration after ", max_tries, " tries.")
+            print(f"Could not find a valid configuration after {max_tries} tries.")
             print("Creating a default empty grid world.")
             self.map = np.zeros((size, size))
             self.place_start_and_goal()
+            print("\nFinal configuration (empty grid):")
+            visualize_grid(self)
+            print(f"Start: {self.start_pos}, Goal: {self.goal_pos}")
 
         self.create_state_space()
         self.start_features = starting_features
-        assert slip_prob >= 0 and slip_prob*3 <= 1, "Slip probability should be between 0 and shouldn't add upto more than one."
+        assert slip_prob >= 0 and slip_prob*3 <= 1, "Slip probability should be between 0 and shouldn't add up to more than one."
 
     def place_random_obstacles(self):
         self.state_space = None
         np.random.seed(self.obstacle_seed)
         total_obstacles = int(self.size * self.size * self.obstacles_percent)
-        for i in range(total_obstacles):
+        obstacles_placed = 0
+        while obstacles_placed < total_obstacles:
             x = np.random.randint(self.size)
             y = np.random.randint(self.size)
-            self.map[x, y] = -1
+            if (x, y) != self.start_pos and (x, y) != self.goal_pos and self.map[x, y] != -1:
+                self.map[x, y] = -1
+                obstacles_placed += 1
+    
 
     def divide_into_rooms(self):
         self.state_space = None
@@ -278,25 +292,48 @@ class GridWorld(MDP):
         start_state = [self.start_pos, tuple(self.start_features), tuple(self.locatables)]
         return start_state
 
-    def visualize(self):
-        print(self.map)
+
+
+
 
     def get_goal_states(self):
         return [[self.goal_pos, tuple(self.start_features), tuple(self.locatables)]]
 
 
+def generate_and_visualize_gridworld(size, start, goal, obstacles_percent, divide_rooms, max_attempts=100, model_type="Model"):
+    for attempt in range(max_attempts):
+        grid = GridWorld(size=size, start=start, goal=goal, obstacles_percent=obstacles_percent, divide_rooms=divide_rooms)
+        if grid.check_for_path():
+            print(f"\nSuccessful {model_type}:")
+            visualize_grid(grid)
+            print(f"Start: {grid.start_pos}, Goal: {grid.goal_pos}")
+            return grid
+    print(f"Failed to generate a valid {model_type} after {max_attempts} attempts.")
+    return None
 
-
+def visualize_grid(grid):
+    symbols = {
+        0: '⬜',  # Empty cell
+        -1: '⬛',  # Obstacle
+    }
+    for i in range(grid.size):
+        for j in range(grid.size):
+            if (i, j) == grid.start_pos:
+                print('🟥', end='')
+            elif (i, j) == grid.goal_pos:
+                print('🟩', end='')
+            else:
+                print(symbols[grid.map[i, j]], end='')
+        print()
 
 
 if __name__ == "__main__":
-    grid = GridWorld(start=(0,0), goal=(1, 1), size=2, obstacles_percent=0, discount=0.99)
-    grid.visualize()
+    grid = GridWorld(start=(0,0), goal=(4, 4), size=5, obstacles_percent=0, discount=0.99)
+    visualize_grid(grid)
     print(grid.get_init_state())
     #print(grid.get_transition_probability([(1,1),(),()], 'down', [(2,1),(),()]))
     V = ValueIteration(grid)
     print(V)
-
 
 
 
