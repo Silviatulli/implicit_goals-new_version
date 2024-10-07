@@ -105,35 +105,64 @@ class GridWorld(MDP):
             self.goal_pos = (np.random.randint(self.size), np.random.randint(self.size))
 
 
-    def get_all_neighbors(self, node):
-        x, y = node[0]
+    # def get_all_neighbors(self, node):
+    #     x, y = node[0]
+    #     neighbors = []
+    #     if x > 0:
+    #         if self.map[x-1, y] != -1:
+    #             neighbors.append(((x-1, y), "up"))
+    #     if x < self.size-1:
+    #         if self.map[x+1, y] != -1:
+    #             neighbors.append(((x+1, y), "down"))
+    #     if y > 0:
+    #         if self.map[x, y-1] != -1:
+    #             neighbors.append(((x, y-1), "left"))
+    #     if y < self.size-1:
+    #         if self.map[x, y+1] != -1:
+    #             neighbors.append(((x, y+1), "right"))
+    #     return neighbors
+
+    def get_all_neighbors(self, state):
+        x, y = state
         neighbors = []
-        if x > 0:
-            if self.map[x-1, y] != -1:
-                neighbors.append(((x-1, y), "up"))
-        if x < self.size-1:
-            if self.map[x+1, y] != -1:
-                neighbors.append(((x+1, y), "down"))
-        if y > 0:
-            if self.map[x, y-1] != -1:
-                neighbors.append(((x, y-1), "left"))
-        if y < self.size-1:
-            if self.map[x, y+1] != -1:
-                neighbors.append(((x, y+1), "right"))
+        for dx, dy, action in [(0, -1, "left"), (0, 1, "right"), (-1, 0, "up"), (1, 0, "down")]:
+            new_x, new_y = x + dx, y + dy
+            if 0 <= new_x < self.size and 0 <= new_y < self.size:
+                if self.map[new_x, new_y] != -1:
+                    neighbors.append(((new_x, new_y), action))
+            #         print(f"    Valid neighbor: ({new_x}, {new_y}), Action: {action}")
+            #     else:
+            #         print(f"    Obstacle at: ({new_x}, {new_y})")
+            # else:
+            #     print(f"    Out of bounds: ({new_x}, {new_y})")
         return neighbors
 
-    def check_goal_reached(self, node):
-        x, y = node[0]
-        return x == self.goal_pos[0] and y == self.goal_pos[1]
+    # def check_goal_reached(self, node):
+    #     x, y = node[0]
+    #     return x == self.goal_pos[0] and y == self.goal_pos[1]
+    
+    def check_goal_reached(self, state):
+        return state == self.goal_pos
 
+    # def check_for_path(self):
+    #     if self.start_pos is None or self.goal_pos is None:
+    #        print("Start or goal not set.")
+    #        return False
+    #     path = BFSearch(self.start_pos, self.check_goal_reached, self.get_all_neighbors)
+    #     if path is None:
+    #         print("No path found.")
+    #         return False
+    #     return True
+    
     def check_for_path(self):
         if self.start_pos is None or self.goal_pos is None:
-           print("Start or goal not set.")
-           return False
+            # print("Start or goal not set.")
+            return False
         path = BFSearch(self.start_pos, self.check_goal_reached, self.get_all_neighbors)
         if path is None:
-            print("No path found.")
+            # print("No path found.")
             return False
+        # print(f"Path found: {' -> '.join(path)}")
         return True
 
 
@@ -152,6 +181,7 @@ class GridWorld(MDP):
                                 current_state.append(agent_feature_set)
                                 current_state.append(locatable_set)
                 self.state_space.append(current_state)
+    
     def get_state_space(self):
         if self.state_space is None:
             self.create_state_space()
@@ -293,9 +323,6 @@ class GridWorld(MDP):
         return start_state
 
 
-
-
-
     def get_goal_states(self):
         return [[self.goal_pos, tuple(self.start_features), tuple(self.locatables)]]
 
@@ -334,6 +361,23 @@ if __name__ == "__main__":
     #print(grid.get_transition_probability([(1,1),(),()], 'down', [(2,1),(),()]))
     V = ValueIteration(grid)
     print(V)
+
+
+# if __name__ == "__main__":
+#     # Test path finding
+#     print("\nTesting path finding:")
+#     test_grid = GridWorld(size=10, start=(0,0), goal=(7,7), obstacles_percent=0.2)
+#     print("Grid:")
+#     visualize_grid(test_grid)
+#     test_grid.check_for_path()
+
+#     # Test with no valid path
+#     print("\nTesting with no valid path:")
+#     no_path_grid = GridWorld(size=3, start=(0,0), goal=(2,2), obstacles_percent=0)
+#     no_path_grid.map[1, :] = -1  # hardcode a wall
+#     print("Grid:")
+#     visualize_grid(no_path_grid)
+#     no_path_grid.check_for_path()
 
 
 

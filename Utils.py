@@ -51,7 +51,7 @@ def vectorized_value_iteration(mdp, epsilon=0.001, max_iterations=1000):
         Q = np.sum(P * (R + mdp.discount * V_prev), axis=2)
         V_array = np.max(Q, axis=1)
         delta = np.max(np.abs(V_array - V_prev))
-        print(delta)
+        # print(delta)
         if delta < epsilon:
             break
     

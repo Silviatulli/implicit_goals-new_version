@@ -1,7 +1,9 @@
 from MDP import MDP
 from collections import defaultdict
-from GridWorldClass import GridWorld
-from Utils import ValueIteration
+from GridWorldClass import *
+from Utils import ValueIteration, vectorized_value_iteration
+
+
 class DeterminizedMDP(MDP):
     def __init__(self, mdp):
         self.mdp = mdp
@@ -61,20 +63,62 @@ class DeterminizedMDP(MDP):
         return 0
 
 
+# if __name__ == "__main__":
+#     grid = GridWorld(start=(0,0), goal=(4, 4), divide_rooms=True)
+#     grid.visualize()
+#     det_mdp = DeterminizedMDP(grid)
+#     print(det_mdp.get_actions())
+#     # print(det_mdp.get_transition_probability(((0,0),), 'act_0', ((0,0),)))
+#     # print(det_mdp.get_reward(((0,0),), 'act_0', ((0,0),)))
+#     print(det_mdp.get_init_state())
+#     init_state_hash = det_mdp.get_state_hash(det_mdp.get_init_state())
+#     det_mdp.reward_func = det_mdp.bottleneck_reward
+#     bottleneck_list = []
+#     for state in det_mdp.get_state_space():
+#         det_mdp.bottleneck_state = det_mdp.get_state_hash(state)
+#         V = ValueIteration(det_mdp)
+#         if V[init_state_hash] <= 0:
+#             bottleneck_list.append(state)
+#     print(bottleneck_list)
+
+
+
+
 if __name__ == "__main__":
     grid = GridWorld(start=(0,0), goal=(4, 4), divide_rooms=True)
-    grid.visualize()
+    visualize_grid(grid)
     det_mdp = DeterminizedMDP(grid)
-    print(det_mdp.get_actions())
-    # print(det_mdp.get_transition_probability(((0,0),), 'act_0', ((0,0),)))
-    # print(det_mdp.get_reward(((0,0),), 'act_0', ((0,0),)))
-    print(det_mdp.get_init_state())
-    init_state_hash = det_mdp.get_state_hash(det_mdp.get_init_state())
+    print("Actions:", det_mdp.get_actions())
+    print("Initial state:", det_mdp.get_init_state())
+
+    # Identify bottleneck states
     det_mdp.reward_func = det_mdp.bottleneck_reward
     bottleneck_list = []
     for state in det_mdp.get_state_space():
         det_mdp.bottleneck_state = det_mdp.get_state_hash(state)
-        V = ValueIteration(det_mdp)
-        if V[init_state_hash] <= 0:
+        V = vectorized_value_iteration(det_mdp)
+        if V[det_mdp.get_init_state()] <= 0:
             bottleneck_list.append(state)
-    print(bottleneck_list)
+    print("Bottleneck states:", bottleneck_list)
+
+    grid2 = GridWorld(size=8, start=(0,0), goal=(7,7), divide_rooms=True)
+    visualize_grid(grid2)
+    det_mdp2 = DeterminizedMDP(grid2)
+    print("Actions:", det_mdp2.get_actions())
+    print("Initial state:", det_mdp2.get_init_state())
+
+    # Identify bottleneck states for larger grid
+    det_mdp2.reward_func = det_mdp2.bottleneck_reward
+    bottleneck_list2 = []
+    for state in det_mdp2.get_state_space():
+        det_mdp2.bottleneck_state = det_mdp2.get_state_hash(state)
+        V = vectorized_value_iteration(det_mdp2)
+        if V[det_mdp2.get_init_state()] <= 0:
+            bottleneck_list2.append(state)
+    print("Bottleneck states:", bottleneck_list2)
+
+    # Verify determinization
+    original_transition = grid.get_transition_probability(((0,0),), 'up', ((0,0),))
+    det_transition = det_mdp.get_transition_probability(((0,0),), 'act_0', ((0,0),))
+    print(f"Original transition probability: {original_transition}")
+    print(f"Determinized transition probability: {det_transition}")
