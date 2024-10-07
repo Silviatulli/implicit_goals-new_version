@@ -8,7 +8,6 @@ def generate_human_models(base_model, num_models=3):
     human_models = []
     
     for _ in range(num_models):
-        # Modify all three aspects for each model
         new_model = GridWorld(
             size=base_model.size,
             start=base_model.start_pos,
