@@ -199,7 +199,8 @@ class GridWorld(MDP):
             return 0
 
         # Make goal state absorbing state
-        if self.check_goal_reached(state):
+        if self.check_goal_reached(state[0]):
+            #print("We are in goal state", state, state_prime)
             if state == state_prime:
                 return 1
             else:

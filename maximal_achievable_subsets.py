@@ -94,40 +94,40 @@ if __name__ == "__main__":
     print("\nAll bottleneck states:", B)
 
 
-# if __name__ == "__main__":
-#     from GridWorldClass import generate_and_visualize_gridworld
+if __name__ == "__main__":
+    from GridWorldClass import generate_and_visualize_gridworld
     
-#     # Generate robot model
-#     M_R = generate_and_visualize_gridworld(size=5, start=(0,0), goal=(4,4), obstacles_percent=0.1, divide_rooms=True, model_type="Robot Model")
+    # Generate robot model
+    M_R = generate_and_visualize_gridworld(size=5, start=(0,0), goal=(4,4), obstacles_percent=0.1, divide_rooms=True, model_type="Robot Model")
 
-#     # Generate human models with different configurations
-#     M_H_list = []
-#     human_configs = [
-#         {"obstacles_percent": 0.1, "divide_rooms": True},
-#         {"obstacles_percent": 0.1, "divide_rooms": True},
-#         {"obstacles_percent": 0.1, "divide_rooms": False}
-#     ]
+    # Generate human models with different configurations
+    M_H_list = []
+    human_configs = [
+        {"obstacles_percent": 0.1, "divide_rooms": True},
+        {"obstacles_percent": 0.1, "divide_rooms": True},
+        {"obstacles_percent": 0.1, "divide_rooms": False}
+    ]
     
 
-#     for i, config in enumerate(human_configs):
-#         M_H = generate_and_visualize_gridworld(size=5, start=(0,0), goal=(4,4), 
-#                                                obstacles_percent=config["obstacles_percent"], 
-#                                                divide_rooms=config["divide_rooms"], 
-#                                                model_type=f"Human Model {i+1}")
-#         if M_H:
-#             M_H_list.append(M_H)
+    for i, config in enumerate(human_configs):
+        M_H = generate_and_visualize_gridworld(size=5, start=(0,0), goal=(4,4),
+                                               obstacles_percent=config["obstacles_percent"],
+                                               divide_rooms=config["divide_rooms"],
+                                               model_type=f"Human Model {i+1}")
+        if M_H:
+            M_H_list.append(M_H)
 
-#     # Proceed with analysis only if we have valid models
-#     if M_R and M_H_list:
-#         print("\nRobot Model Initial State:", M_R.get_init_state())
-#         print("\nActions available in Human Model 1:", M_H_list[0].get_actions())
+    # Proceed with analysis only if we have valid models
+    if M_R and M_H_list:
+        print("\nRobot Model Initial State:", M_R.get_init_state())
+        print("\nActions available in Human Model 1:", M_H_list[0].get_actions())
 
-#         I, B = find_maximally_achievable_subsets(M_R, M_H_list)
-#         print("\nMaximally achievable subsets of bottleneck states:")
-#         for subset in I:
-#             print(subset)
-#         print("\nAll bottleneck states:", B)
-#     else:
-#         print("Could not generate valid models for analysis.")
+        I, B = find_maximally_achievable_subsets(M_R, M_H_list)
+        print("\nMaximally achievable subsets of bottleneck states:")
+        for subset in I:
+            print(subset)
+        print("\nAll bottleneck states:", B)
+    else:
+        print("Could not generate valid models for analysis.")
 
 

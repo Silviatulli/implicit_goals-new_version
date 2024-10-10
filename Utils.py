@@ -22,6 +22,24 @@ def ValueIteration(mdp, epsilon=0.001):
     return V
 
 
+def get_policy(mdp, V):
+    policy = {}
+    for s in mdp.get_state_space():
+        s_hash = mdp.get_state_hash(s)
+        best_action = None
+        best_q_value = None
+        for act in mdp.get_actions():
+            current_q_value = sum([mdp.get_transition_probability(s, act, s_prime) * (mdp.get_reward(s, act, s_prime) + V[mdp.get_state_hash(s_prime)]) for s_prime in mdp.get_state_space()])
+            if best_action is None:
+                best_action = act
+                best_q_value = current_q_value
+            elif current_q_value > best_q_value:
+                best_action = act
+                best_q_value = current_q_value
+        policy[s_hash] = best_action
+    return policy
+
+
 def vectorized_value_iteration(mdp, epsilon=0.001, max_iterations=1000):
     # Initialize value function
     V = {mdp.get_state_hash(s): 0 for s in mdp.get_state_space()}
@@ -39,9 +57,12 @@ def vectorized_value_iteration(mdp, epsilon=0.001, max_iterations=1000):
     for i, s in enumerate(states):
         for a_idx, a in enumerate(mdp.get_actions()):
             for j, s_next in enumerate(states):
+                #if mdp.get_transition_probability(s, a, s_next) > 0:
+                #    print(s, a, s_next, mdp.get_reward(s, a, s_next))
+                #    print(s, a, s_next, mdp.get_transition_probability(s, a, s_next))
                 P[i, a_idx, j] = mdp.get_transition_probability(s, a, s_next)
                 R[i, a_idx, j] = mdp.get_reward(s, a, s_next)
-    
+
     V_array = np.zeros(n_states)
     
     for _ in range(max_iterations):
@@ -60,3 +81,5 @@ def vectorized_value_iteration(mdp, epsilon=0.001, max_iterations=1000):
         V[mdp.get_state_hash(s)] = v
     
     return V
+
+
