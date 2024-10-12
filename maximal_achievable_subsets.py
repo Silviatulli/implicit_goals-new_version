@@ -1,6 +1,7 @@
 from MDP import MDP
 from GridWorldClass import GridWorld, visualize_grid
-from Utils import ValueIteration, vectorized_value_iteration
+from Utils import ValueIteration, vectorized_value_iteration, get_policy
+from BottleneckCheckMDP import BottleneckMDP
 from collections import defaultdict
 import numpy as np
 from DeterminizedMDP import DeterminizedMDP
@@ -48,55 +49,66 @@ def identify_bottlenecks(M):
     bottlenecks = []
     
     for state in det_mdp.get_state_space():
-        det_mdp.bottleneck_state = det_mdp.get_state_hash(state)
-        V = vectorized_value_iteration(det_mdp)
-        if V[init_state_hash] <= 0:
-            bottlenecks.append(tuple(state))  # Convert state to tuple
-            print(f"Identified bottleneck state: {tuple(state)}")
+        if state != M.get_init_state() and state != M.get_goal_states()[0]:
+            det_mdp.bottleneck_state = det_mdp.get_state_hash(state)
+            V = vectorized_value_iteration(det_mdp)
+            if V[init_state_hash] <= 0:
+                bottlenecks.append(tuple(state))  # Convert state to tuple
+                print(f"Identified bottleneck state: {tuple(state)}")
     
     return bottlenecks
 
 def check_achievability(I_prime, M_R):
-    det_mdp = DeterminizedMDP(M_R)
-    init_state_hash = det_mdp.get_state_hash(det_mdp.get_init_state())
-    
-    def achievability_reward(state, action, next_state):
-        if tuple(next_state) in I_prime and tuple(state) not in I_prime:
-            return 1
-        return 0
-    
-    det_mdp.reward_func = achievability_reward
-    V = vectorized_value_iteration(det_mdp)
-    
-    is_achievable = V[init_state_hash] > 0
-    print(f"Achievability check: {'Achievable' if is_achievable else 'Not achievable'}")
+    M = BottleneckMDP(M_R, I_prime)
+    V = vectorized_value_iteration(M)
+    # for s in M.state_space:
+    #    print(s, V[M.get_state_hash(s)])
+    # exit(0)
+    policy = get_policy(M, V)
+
+    M.reward_func = None
+    # Determinized for the policy
+    det_mdp_for_policy = DeterminizedMDP(M, policy)
+    det_mdp_for_policy.bottleneck_MDP = M
+
+    det_mdp_for_policy.reward_func = det_mdp_for_policy.reward_function_for_avoiding_all_bottleneck
+
+    V = vectorized_value_iteration(det_mdp_for_policy)
+    initial_state_hash = det_mdp_for_policy.get_state_hash(det_mdp_for_policy.get_init_state())
+    # print(policy)
+    is_achievable = False
+    if V[initial_state_hash] <= 0:
+        is_achievable = True
+        print("Achievable")
     return is_achievable
 
 
-if __name__ == "__main__":
-    # Generate a simple robot model
-    M_R = GridWorld(size=3, start=(0,0), goal=(2,2), obstacles_percent=0, divide_rooms=False, slip_prob=0.1)
-    print("Robot Model:")
-    visualize_grid(M_R)
-
-    # Generate a simple human model
-    M_H = GridWorld(size=3, start=(0,0), goal=(2,2), obstacles_percent=0.2, divide_rooms=False, slip_prob=0.1)
-    print("\nHuman Model:")
-    visualize_grid(M_H)
-
-
-    # Find maximally achievable subsets
-    I, B = find_maximally_achievable_subsets(M_R, [M_H])
-    
-    print("\nMaximally achievable subsets of bottleneck states:")
-    for subset in I:
-        print(subset)
-    print("\nAll bottleneck states:", B)
+# if __name__ == "__main__":
+#     # Generate a simple robot model
+#     M_R = GridWorld(size=5, start=(0, 0), goal=(4, 4), obstacles_percent=0.1, divide_rooms=False, slip_prob=0.1)
+#     print("Robot Model:")
+#     visualize_grid(M_R)
+#
+#     # Generate a simple human model
+#     M_H = GridWorld(size=5, start=(0, 0), goal=(4, 4), obstacles_percent=0.1, divide_rooms=True, slip_prob=0.1)
+#     #M_H = generate_and_visualize_gridworld(size=5, start=(0, 0), goal=(4, 4), obstacles_percent=0.1, divide_rooms=True,
+#                                            #model_type=f"Human Model 1")
+#     print("\nHuman Model:")
+#     visualize_grid(M_H)
+#
+#
+#     # Find maximally achievable subsets
+#     I, B = find_maximally_achievable_subsets(M_R, [M_H])
+#
+#     print("\nMaximally achievable subsets of bottleneck states:")
+#     for subset in I:
+#         print(subset)
+#     print("\nAll bottleneck states:", B)
 
 
 if __name__ == "__main__":
     from GridWorldClass import generate_and_visualize_gridworld
-    
+
     # Generate robot model
     M_R = generate_and_visualize_gridworld(size=5, start=(0,0), goal=(4,4), obstacles_percent=0.1, divide_rooms=True, model_type="Robot Model")
 
@@ -107,7 +119,7 @@ if __name__ == "__main__":
         {"obstacles_percent": 0.1, "divide_rooms": True},
         {"obstacles_percent": 0.1, "divide_rooms": False}
     ]
-    
+
 
     for i, config in enumerate(human_configs):
         M_H = generate_and_visualize_gridworld(size=5, start=(0,0), goal=(4,4),
