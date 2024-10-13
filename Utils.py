@@ -64,7 +64,7 @@ def vectorized_value_iteration(mdp, epsilon=0.001, max_iterations=1000):
                 R[i, a_idx, j] = mdp.get_reward(s, a, s_next)
 
     V_array = np.zeros(n_states)
-    
+
     for _ in range(max_iterations):
         V_prev = V_array.copy()
         
@@ -83,3 +83,70 @@ def vectorized_value_iteration(mdp, epsilon=0.001, max_iterations=1000):
     return V
 
 
+def extract_path(mdp, V, start_state, target_state):
+    current_state = start_state
+    path = [current_state]
+    while current_state[0] != target_state:  # Compare only the position part of the state
+        best_action = None
+        best_value = float('-inf')
+        best_next_state = None
+        for action in mdp.get_actions():
+            for next_state in mdp.get_state_space():
+                prob = mdp.get_transition_probability(current_state, action, next_state)
+                if prob > 0:
+                    value = V[mdp.get_state_hash(next_state)]
+                    if value > best_value:
+                        best_value = value
+                        best_action = action
+                        best_next_state = next_state
+        if best_next_state is None:
+            print(f"No valid next state found from {current_state}")
+            break
+        current_state = best_next_state
+        path.append(current_state)
+        if len(path) > 100:  # Prevent infinite loops
+            print("Path extraction stopped due to length limit")
+            break
+    return path
+
+def check_bottleneck_achievability(robot_mdp, robot_bottlenecks, human_bottlenecks):
+    achievable_bottlenecks = []
+
+    for human_bottleneck in human_bottlenecks:
+        print(f"\nChecking achievability of human bottleneck: {human_bottleneck}")
+
+        # Check if the human bottleneck is an obstacle in the robot's model
+        if robot_mdp.map[human_bottleneck[0]] == -1:
+            print(f"Bottleneck {human_bottleneck} is an obstacle in the robot's model")
+            continue
+
+        def bottleneck_reward(state, action, next_state):
+            if next_state[0] == human_bottleneck[0]:
+                return 1000
+            elif robot_mdp.check_goal_reached(next_state[0]):
+                return 500  # Smaller reward for reaching the goal
+            return 0
+
+        robot_mdp.reward_func = bottleneck_reward
+
+        V = vectorized_value_iteration(robot_mdp)
+        initial_state = robot_mdp.get_init_state()
+        initial_state_hash = robot_mdp.get_state_hash(initial_state)
+
+        print(f"Initial state: {initial_state}")
+        print(f"Initial state hash: {initial_state_hash}")
+        print(f"Value of initial state: {V[initial_state_hash]}")
+
+        # Check if there's a path with significant positive value
+        if V[initial_state_hash] > 10:  # Adjust this threshold as needed
+            achievable_bottlenecks.append(human_bottleneck)
+            print(f"Bottleneck {human_bottleneck} is achievable")
+        else:
+            print(f"Bottleneck {human_bottleneck} is NOT achievable")
+
+        # Print some path information
+        path = extract_path(robot_mdp, V, initial_state, human_bottleneck[0])
+        print(f"Path to bottleneck: {path}")
+        print(f"Path length: {len(path)}")
+
+    return achievable_bottlenecks

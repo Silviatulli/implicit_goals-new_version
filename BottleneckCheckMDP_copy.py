@@ -212,7 +212,7 @@ class HumanBottleneckMDP(object):
     
     
 if __name__ == "__main__":
-    from GridWorldClass import generate_and_visualize_gridworld, visualize_grids_with_bottlenecks
+    from GridWorldClass_copy import generate_and_visualize_gridworld, visualize_grids_with_bottlenecks
     from DeterminizedMDP import identify_bottlenecks
     
     # Generate Robot Model
@@ -265,4 +265,6 @@ if __name__ == "__main__":
 
     V = vectorized_value_iteration(det_mdp_for_policy)
     initial_state_hash = det_mdp_for_policy.get_state_hash(det_mdp_for_policy.get_init_state())
-    print(policy)
+    #print(policy)
+    if V[initial_state_hash] <=0:
+        print("Achievable")
