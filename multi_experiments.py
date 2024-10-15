@@ -12,6 +12,28 @@ import numpy as np
 import time
 import random
 
+
+def visualize_taxiworld(taxi_world):
+    print(f"Grid Size: {taxi_world.size}x{taxi_world.size}")
+    print(f"Start: {taxi_world.start_pos}")
+    print(f"Passengers: {taxi_world.passenger_locs}")
+    print(f"Destinations: {taxi_world.destinations}")
+    
+    for i in range(taxi_world.size):
+        for j in range(taxi_world.size):
+            if (i, j) == taxi_world.start_pos:
+                print("S", end=" ")
+            elif (i, j) in taxi_world.passenger_locs:
+                print(f"P{taxi_world.passenger_locs.index((i,j))+1}", end=" ")
+            elif (i, j) in taxi_world.destinations:
+                print(f"D{taxi_world.destinations.index((i,j))+1}", end=" ")
+            elif taxi_world.map[i, j] == -1:
+                print("█", end=" ")
+            else:
+                print(".", end=" ")
+        print()
+
+
 def generate_and_visualize_puddleworld(size, start, goal, obstacles_percent, puddle_percent, model_type, obstacle_seed):
     return PuddleWorld(size=size, start=start, goal=goal, 
                        obstacles_percent=obstacles_percent,
@@ -24,25 +46,29 @@ def generate_and_visualize_rockworld(size, start, goal, obstacles_percent, rock_
                      rock_percent=rock_percent,
                      obstacle_seed=obstacle_seed)
 
+
 def generate_and_visualize_taxiworld(size, start, goal, obstacles_percent, model_type, obstacle_seed):
-                    # Generate a random passenger location
-                    passenger_loc = (random.randint(0, size-1), random.randint(0, size-1))
-                    
-                    # Create the TaxiWorld instance
-                    taxi_world = TaxiWorld(
-                        size=size,
-                        start=start,
-                        passenger_loc=passenger_loc,
-                        destination=goal,
-                        obstacles_percent=obstacles_percent,
-                        obstacle_seed=obstacle_seed
-                    )
-                    
-                    # Visualize the world (optional)
-                    print(f"\n{model_type}:")
-                    taxi_world.visualize()
-                    
-                    return taxi_world
+    # Generate random passenger locations and destinations
+    num_passengers = 2  # You can adjust this as needed
+    passenger_locs = [(random.randint(0, size-1), random.randint(0, size-1)) for _ in range(num_passengers)]
+    destinations = [(random.randint(0, size-1), random.randint(0, size-1)) for _ in range(num_passengers)]
+    
+    # Create the TaxiWorld instance
+    taxi_world = TaxiWorld(
+        size=size,
+        num_passengers=num_passengers,
+        start=start,
+        passenger_locs=passenger_locs,
+        destinations=destinations,
+        obstacles_percent=obstacles_percent,
+        obstacle_seed=obstacle_seed
+    )
+    
+    # Visualize the world (optional)
+    print(f"\n{model_type}:")
+    visualize_taxiworld(taxi_world)
+    
+    return taxi_world
 
 def generate_and_visualize_minigridworld(env_type, size, model_type):
     if env_type == 'unlock':
@@ -57,7 +83,9 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
         "query_counts": [],
         "human_bottlenecks": [],
         "maximal_subset_times": [],
-        "query_times": []
+        "query_times": [],
+        "state_space_sizes": [],
+        "action_space_sizes": []
     }
 
     for run in range(num_runs):
@@ -66,6 +94,11 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
 
         # Generate robot model
         print("Generating robot model...")
+        if world_type == 'taxi':
+            M_R = generate_and_visualize_taxiworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
+                                                   obstacles_percent=0.1, 
+                                                   model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
+
         if world_type == 'grid':
             M_R = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
                                                    obstacles_percent=0.1, divide_rooms=True, 
@@ -77,10 +110,6 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
         elif world_type == 'rock':
             M_R = generate_and_visualize_rockworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
                                                    obstacles_percent=0.1, rock_percent=0.1, 
-                                                   model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
-        elif world_type == 'taxi':
-            M_R = generate_and_visualize_taxiworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                   obstacles_percent=0.1, 
                                                    model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
         elif world_type == 'minigrid_unlock':
             M_R = generate_and_visualize_minigridworld('unlock', grid_size, "Robot Model")
@@ -109,7 +138,6 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
                                                        model_type=f"Human Model {i+1}", 
                                                        obstacle_seed=random.randint(1, 10000))
             elif world_type == 'taxi':
-                # Usage in your experiment loop:
                 M_H = generate_and_visualize_taxiworld(
                     size=grid_size, 
                     start=(0,0), 
@@ -150,6 +178,8 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
         print(f"Query MDP completed in {query_time:.2f} seconds")
 
         results["query_counts"].append(query_count)
+        results["state_space_sizes"].append(len(query_mdp.state_space))
+        results["action_space_sizes"].append(len(query_mdp.action_space))
 
         print(f"Run {run + 1} completed in {time.time() - start_time_total:.2f} seconds")
 
@@ -163,7 +193,10 @@ def print_results(results, num_runs, num_models, grid_size, world_type):
     print(f"Grid size: {grid_size}x{grid_size}")
     
     for metric, values in results.items():
-        print(f"{metric}: {np.mean(values):.2f} ± {np.std(values):.2f}")
+        if metric in ["state_space_sizes", "action_space_sizes"]:
+            print(f"{metric}: {np.mean(values):.2f} ± {np.std(values):.2f}")
+        else:
+            print(f"{metric}: {np.mean(values):.2f} ± {np.std(values):.2f}")
 
 if __name__ == "__main__":
     num_runs = 1
