@@ -1,11 +1,13 @@
 from PuddleWorldClass import PuddleWorld
 from RockWorldClass import RockWorld
 from TaxiWorldClass import TaxiWorld
-from GridWorldClass_copy import generate_and_visualize_gridworld
+from MinigridWorldClass import UnlockEnv, UnlockPickupEnv
+from GridWorldClass import generate_and_visualize_gridworld
 from DeterminizedMDP import identify_bottlenecks
 from BottleneckCheckMDP import BottleneckMDP
 from QueryMDP import QueryMDP, simulate_policy
-from Utils import vectorized_value_iteration, get_policy
+from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_robust_policy, robust_vectorized_value_iteration
+from maximal_achievable_subsets import optimized_find_maximally_achievable_subsets
 import numpy as np
 import time
 import random
@@ -23,19 +25,38 @@ def generate_and_visualize_rockworld(size, start, goal, obstacles_percent, rock_
                      obstacle_seed=obstacle_seed)
 
 def generate_and_visualize_taxiworld(size, start, goal, obstacles_percent, model_type, obstacle_seed):
-    passenger_loc = (random.randint(0, size-1), random.randint(0, size-1))
-    return TaxiWorld(size=size, start=start, passenger_loc=passenger_loc, destination=goal, 
-                     obstacles_percent=obstacles_percent,
-                     obstacle_seed=obstacle_seed)
+                    # Generate a random passenger location
+                    passenger_loc = (random.randint(0, size-1), random.randint(0, size-1))
+                    
+                    # Create the TaxiWorld instance
+                    taxi_world = TaxiWorld(
+                        size=size,
+                        start=start,
+                        passenger_loc=passenger_loc,
+                        destination=goal,
+                        obstacles_percent=obstacles_percent,
+                        obstacle_seed=obstacle_seed
+                    )
+                    
+                    # Visualize the world (optional)
+                    print(f"\n{model_type}:")
+                    taxi_world.visualize()
+                    
+                    return taxi_world
 
-def run_experiments(num_runs=5, num_models=3, grid_size=5, world_type='grid', query_threshold=1000):
+def generate_and_visualize_minigridworld(env_type, size, model_type):
+    if env_type == 'unlock':
+        return UnlockEnv(size=size)
+    elif env_type == 'unlock_pickup':
+        return UnlockPickupEnv(size=size)
+    else:
+        raise ValueError(f"Unknown Minigrid environment type: {env_type}")
+
+def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold):
     results = {
         "query_counts": [],
-        "query_costs": [],
         "human_bottlenecks": [],
-        "total_times": [],
-        "generation_times": [],
-        "bottleneck_times": [],
+        "maximal_subset_times": [],
         "query_times": []
     }
 
@@ -45,40 +66,32 @@ def run_experiments(num_runs=5, num_models=3, grid_size=5, world_type='grid', qu
 
         # Generate robot model
         print("Generating robot model...")
-        start_time = time.time()
         if world_type == 'grid':
             M_R = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
                                                    obstacles_percent=0.1, divide_rooms=True, 
                                                    model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
         elif world_type == 'puddle':
             M_R = generate_and_visualize_puddleworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                     obstacles_percent=0.1, puddle_percent=0.2,
+                                                     obstacles_percent=0.1, puddle_percent=0.1, 
                                                      model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
         elif world_type == 'rock':
             M_R = generate_and_visualize_rockworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                   obstacles_percent=0.1, rock_percent=0.3,
+                                                   obstacles_percent=0.1, rock_percent=0.1, 
                                                    model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
         elif world_type == 'taxi':
             M_R = generate_and_visualize_taxiworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                   obstacles_percent=0.1,
+                                                   obstacles_percent=0.1, 
                                                    model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
-        generation_time = time.time() - start_time
-        results["generation_times"].append(generation_time)
-        print(f"Robot model generated in {generation_time:.2f} seconds")
+        elif world_type == 'minigrid_unlock':
+            M_R = generate_and_visualize_minigridworld('unlock', grid_size, "Robot Model")
+        elif world_type == 'minigrid_unlock_pickup':
+            M_R = generate_and_visualize_minigridworld('unlock_pickup', grid_size, "Robot Model")
+        else:
+            raise ValueError(f"Unknown world type: {world_type}")
 
-        # Identify robot bottlenecks
-        print("Identifying robot bottlenecks...")
-        start_time = time.time()
-        bottleneck_states_robot = identify_bottlenecks(M_R)
-        bottleneck_states_robot = [b for b in bottleneck_states_robot if b[0] != M_R.goal_pos]
-        bottleneck_time = time.time() - start_time
-        results["bottleneck_times"].append(bottleneck_time)
-        print(f"Robot bottlenecks identified in {bottleneck_time:.2f} seconds")
-
-        # Generate human models and identify their bottlenecks
-        print("Generating human models and identifying their bottlenecks...")
-        all_human_bottlenecks = set()
-        start_time_human = time.time()
+        # Generate human models
+        print("Generating human models...")
+        M_H_list = []
         for i in range(num_models):
             if world_type == 'grid':
                 M_H = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
@@ -87,50 +100,56 @@ def run_experiments(num_runs=5, num_models=3, grid_size=5, world_type='grid', qu
                                                        obstacle_seed=random.randint(1, 10000))
             elif world_type == 'puddle':
                 M_H = generate_and_visualize_puddleworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                         obstacles_percent=0.1, puddle_percent=0.2,
+                                                         obstacles_percent=0.1, puddle_percent=0.1, 
                                                          model_type=f"Human Model {i+1}", 
                                                          obstacle_seed=random.randint(1, 10000))
             elif world_type == 'rock':
                 M_H = generate_and_visualize_rockworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                       obstacles_percent=0.1, rock_percent=0.3,
+                                                       obstacles_percent=0.1, rock_percent=0.1, 
                                                        model_type=f"Human Model {i+1}", 
                                                        obstacle_seed=random.randint(1, 10000))
             elif world_type == 'taxi':
-                M_H = generate_and_visualize_taxiworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                       obstacles_percent=0.1,
-                                                       model_type=f"Human Model {i+1}", 
-                                                       obstacle_seed=random.randint(1, 10000))
-            bottleneck_states_human = identify_bottlenecks(M_H)
-            bottleneck_states_human = [b for b in bottleneck_states_human if b[0] != M_H.goal_pos]
-            all_human_bottlenecks.update(bottleneck_states_human)
-        bottleneck_time = time.time() - start_time_human
-        results["bottleneck_times"].append(bottleneck_time)
-        print(f"Human models generated and bottlenecks identified in {bottleneck_time:.2f} seconds")
+                # Usage in your experiment loop:
+                M_H = generate_and_visualize_taxiworld(
+                    size=grid_size, 
+                    start=(0,0), 
+                    goal=(grid_size-1,grid_size-1),
+                    obstacles_percent=0.1,
+                    model_type=f"Human Model {i+1}",
+                    obstacle_seed=random.randint(1, 10000)
+                )
+            elif world_type.startswith('minigrid'):
+                M_H = generate_and_visualize_minigridworld(world_type.split('_')[1], grid_size, f"Human Model {i+1}")
+            else:
+                raise ValueError(f"Unknown world type: {world_type}")
+            M_H_list.append(M_H)
 
-        results["human_bottlenecks"].append(len(all_human_bottlenecks))
+        # Find maximally achievable subsets
+        print("Finding maximally achievable subsets...")
+        start_time_maximal = time.time()
+        I, B = optimized_find_maximally_achievable_subsets(M_R, M_H_list)
+        maximal_subset_time = time.time() - start_time_maximal
+        results["maximal_subset_times"].append(maximal_subset_time)
+        print(f"Maximally achievable subsets found in {maximal_subset_time:.2f} seconds")
+
+        results["human_bottlenecks"].append(len(B))
 
         print("Running query MDP...")
         start_time = time.time()
-        achievable_bottlenecks = [b for b in all_human_bottlenecks if M_R.map[b[0][0]][b[0][1]] != -1]
-        non_achievable_bottlenecks = [b for b in all_human_bottlenecks if b not in achievable_bottlenecks]
-        query_mdp = QueryMDP(M_R, achievable_bottlenecks, non_achievable_bottlenecks)
-        
+        query_mdp = QueryMDP(M_R, list(B), list(I))
+    
         print("Starting value iteration...")
-        V = vectorized_value_iteration(query_mdp)
+        V = robust_vectorized_value_iteration(query_mdp)
         print("Value iteration completed. Extracting policy...")
-        policy = get_policy(query_mdp, V)
+        policy = get_robust_policy(query_mdp, V)
         print("Policy extracted. Simulating policy...")
-        
-        # Pass the achievable_bottlenecks as the true bottlenecks
-        query_count = simulate_policy(query_mdp, achievable_bottlenecks)
-        
+    
+        query_count = simulate_policy(query_mdp, list(B), query_threshold)
         query_time = time.time() - start_time
         results["query_times"].append(query_time)
         print(f"Query MDP completed in {query_time:.2f} seconds")
 
         results["query_counts"].append(query_count)
-        results["query_costs"].append(query_count)  # Assuming each query has a cost of 1
-        results["total_times"].append(time.time() - start_time_total)
 
         print(f"Run {run + 1} completed in {time.time() - start_time_total:.2f} seconds")
 
@@ -147,12 +166,12 @@ def print_results(results, num_runs, num_models, grid_size, world_type):
         print(f"{metric}: {np.mean(values):.2f} ± {np.std(values):.2f}")
 
 if __name__ == "__main__":
-    num_runs = 5
+    num_runs = 1
     num_models = 3
-    grid_size = 5
-    query_threshold = 1000  # You can adjust this value as needed
+    grid_size = 4
+    query_threshold = 1000 
     
-    world_types = ['grid', 'puddle', 'rock', 'taxi']
+    world_types = ['grid', 'puddle', 'rock', 'taxi', 'minigrid_unlock', 'minigrid_unlock_pickup']
     
     for world_type in world_types:
         print(f"\nStarting experiments for {world_type.capitalize()}World...")
