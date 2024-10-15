@@ -1,13 +1,50 @@
 from MDP import MDP
 from GridWorldClass import GridWorld, visualize_grid
-from Utils import ValueIteration, vectorized_value_iteration, get_policy
+from Utils import ValueIteration, vectorized_value_iteration, get_policy, get_robust_policy, robust_vectorized_value_iteration
 from BottleneckCheckMDP import BottleneckMDP
 from collections import defaultdict
 import numpy as np
 from DeterminizedMDP import DeterminizedMDP
 from collections import deque
+from typing import Set, Tuple, List, FrozenSet
+import functools
 
+def optimized_find_maximally_achievable_subsets(M_R: GridWorld, M_H_list: List[GridWorld]) -> Tuple[Set[FrozenSet], Set[Tuple]]:
+    # Identify all bottleneck states
+    B = set()
+    for M in M_H_list:
+        B.update(tuple(b) for b in identify_bottlenecks(M))
+    
+    print(f"Total bottleneck states: {len(B)}")
 
+    # Convert B to a list and create a bit mask for efficient subset generation
+    B_list = list(B)
+    n = len(B_list)
+
+    @functools.lru_cache(maxsize=None)
+    def check_achievability_cached(subset):
+        return check_achievability(subset, M_R)
+
+    def generate_subsets(index, current_subset):
+        if index == n:
+            if check_achievability_cached(frozenset(current_subset)):
+                for i in range(len(current_subset), n):
+                    new_subset = current_subset + (B_list[i],)
+                    if not check_achievability_cached(frozenset(new_subset)):
+                        yield frozenset(current_subset)
+                        return
+                yield frozenset(current_subset)
+            return
+
+        # Don't include this element
+        yield from generate_subsets(index + 1, current_subset)
+
+        # Include this element
+        yield from generate_subsets(index + 1, current_subset + (B_list[index],))
+
+    I = set(generate_subsets(0, ()))
+
+    return I, B
 
 def find_maximally_achievable_subsets(M_R, M_H_list):
     B = set()  # Set of all bottleneck states
@@ -60,11 +97,11 @@ def identify_bottlenecks(M):
 
 def check_achievability(I_prime, M_R):
     M = BottleneckMDP(M_R, I_prime)
-    V = vectorized_value_iteration(M)
+    V = robust_vectorized_value_iteration(M)
     # for s in M.state_space:
     #    print(s, V[M.get_state_hash(s)])
     # exit(0)
-    policy = get_policy(M, V)
+    policy = get_robust_policy(M, V)
 
     M.reward_func = None
     # Determinized for the policy
@@ -79,7 +116,7 @@ def check_achievability(I_prime, M_R):
     is_achievable = False
     if V[initial_state_hash] <= 0:
         is_achievable = True
-        print("Achievable")
+        #print("Achievable")
     return is_achievable
 
 
@@ -110,7 +147,7 @@ if __name__ == "__main__":
     from GridWorldClass import generate_and_visualize_gridworld
 
     # Generate robot model
-    M_R = generate_and_visualize_gridworld(size=5, start=(0,0), goal=(4,4), obstacles_percent=0.1, divide_rooms=True, model_type="Robot Model")
+    M_R = generate_and_visualize_gridworld(size=4, start=(0,0), goal=(3,3), obstacles_percent=0.1, divide_rooms=True, model_type="Robot Model")
 
     # Generate human models with different configurations
     M_H_list = []
@@ -122,7 +159,7 @@ if __name__ == "__main__":
 
 
     for i, config in enumerate(human_configs):
-        M_H = generate_and_visualize_gridworld(size=5, start=(0,0), goal=(4,4),
+        M_H = generate_and_visualize_gridworld(size=4, start=(0,0), goal=(3,3),
                                                obstacles_percent=config["obstacles_percent"],
                                                divide_rooms=config["divide_rooms"],
                                                model_type=f"Human Model {i+1}")
@@ -134,12 +171,11 @@ if __name__ == "__main__":
         print("\nRobot Model Initial State:", M_R.get_init_state())
         print("\nActions available in Human Model 1:", M_H_list[0].get_actions())
 
-        I, B = find_maximally_achievable_subsets(M_R, M_H_list)
+        I, B = optimized_find_maximally_achievable_subsets(M_R, M_H_list)
         print("\nMaximally achievable subsets of bottleneck states:")
         for subset in I:
             print(subset)
         print("\nAll bottleneck states:", B)
     else:
         print("Could not generate valid models for analysis.")
-
 
