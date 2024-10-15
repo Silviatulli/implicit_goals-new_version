@@ -7,10 +7,11 @@ from DeterminizedMDP import identify_bottlenecks
 from BottleneckCheckMDP import BottleneckMDP
 from QueryMDP import QueryMDP, simulate_policy
 from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_robust_policy, robust_vectorized_value_iteration
-from maximal_achievable_subsets import optimized_find_maximally_achievable_subsets
+from maximal_achievable_subsets import find_maximally_achievable_subsets, optimized_find_maximally_achievable_subsets
 import numpy as np
 import time
 import random
+from DeterminizedMDP import DeterminizedMDP
 
 
 def visualize_taxiworld(taxi_world):
@@ -151,11 +152,17 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
             else:
                 raise ValueError(f"Unknown world type: {world_type}")
             M_H_list.append(M_H)
+            all_human_det_models = []
+            for model in M_H_list:
+                human_det_model = DeterminizedMDP(model)
+                all_human_det_models.append(human_det_model)
+
+        robot_det_model = DeterminizedMDP(M_R)
 
         # Find maximally achievable subsets
         print("Finding maximally achievable subsets...")
         start_time_maximal = time.time()
-        I, B = optimized_find_maximally_achievable_subsets(M_R, M_H_list)
+        I, B = find_maximally_achievable_subsets(M_R, M_H_list)
         maximal_subset_time = time.time() - start_time_maximal
         results["maximal_subset_times"].append(maximal_subset_time)
         print(f"Maximally achievable subsets found in {maximal_subset_time:.2f} seconds")
@@ -164,7 +171,7 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
 
         print("Running query MDP...")
         start_time = time.time()
-        query_mdp = QueryMDP(M_R, list(B), list(I))
+        query_mdp = QueryMDP(robot_det_model, list(B), list(I))
     
         print("Starting value iteration...")
         V = robust_vectorized_value_iteration(query_mdp)
@@ -178,8 +185,8 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
         print(f"Query MDP completed in {query_time:.2f} seconds")
 
         results["query_counts"].append(query_count)
-        results["state_space_sizes"].append(len(query_mdp.state_space))
-        results["action_space_sizes"].append(len(query_mdp.action_space))
+        results["state_space_sizes"].append(len(M_R.state_space))
+        results["action_space_sizes"].append(len(M_R.get_actions()))
 
         print(f"Run {run + 1} completed in {time.time() - start_time_total:.2f} seconds")
 
@@ -201,10 +208,11 @@ def print_results(results, num_runs, num_models, grid_size, world_type):
 if __name__ == "__main__":
     num_runs = 1
     num_models = 3
-    grid_size = 4
+    grid_size = 5
     query_threshold = 1000 
     
-    world_types = ['grid', 'puddle', 'rock', 'taxi', 'minigrid_unlock', 'minigrid_unlock_pickup']
+    world_types = ['grid', 'puddle', 'rock']
+    # 'minigrid_unlock', 'minigrid_unlock_pickup']
     
     for world_type in world_types:
         print(f"\nStarting experiments for {world_type.capitalize()}World...")
