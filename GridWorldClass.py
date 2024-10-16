@@ -2,11 +2,14 @@ from MDP import MDP
 import numpy as np
 from Search import BFSearch
 from Utils import powerset, ValueIteration
+import colorama
+from colorama import Fore, Back, Style
 class GridWorld(MDP):
     def __init__(self, size=5, start=None, goal=None,  obstacles_percent=0.1,
                  divide_rooms=False, room_count=4, agent_features=[], locatables=[],
                  locatable_locations=[], slip_prob=0.1, discount=0.99, max_tries=100, obstacle_seed=1,
                  starting_features=[]):
+        self.obstacle_seed = obstacle_seed if obstacle_seed is not None else np.random.randint(0, 10000)
         self.size = size
         self.start_pos = start
         self.goal_pos = goal
@@ -328,9 +331,9 @@ class GridWorld(MDP):
         return [[self.goal_pos, tuple(self.start_features), tuple(self.locatables)]]
 
 
-def generate_and_visualize_gridworld(size, start, goal, obstacles_percent, divide_rooms, max_attempts=100, model_type="Model"):
+def generate_and_visualize_gridworld(size, start, goal, obstacles_percent, divide_rooms, max_attempts=100, model_type="Model", obstacle_seed=None):
     for attempt in range(max_attempts):
-        grid = GridWorld(size=size, start=start, goal=goal, obstacles_percent=obstacles_percent, divide_rooms=divide_rooms)
+        grid = GridWorld(size=size, start=start, goal=goal, obstacles_percent=obstacles_percent, divide_rooms=divide_rooms, obstacle_seed=obstacle_seed)
         if grid.check_for_path():
             print(f"\nSuccessful {model_type}:")
             visualize_grid(grid)
@@ -338,6 +341,55 @@ def generate_and_visualize_gridworld(size, start, goal, obstacles_percent, divid
             return grid
     print(f"Failed to generate a valid {model_type} after {max_attempts} attempts.")
     return None
+
+def visualize_grids_with_bottlenecks(robot_grid, human_grids, robot_bottlenecks, human_bottlenecks_list, achievable_bottlenecks_list):
+    symbols = {
+        0: '⬜',  # Empty cell
+        -1: '⬛',  # Obstacle
+    }
+    
+    print("Robot Model" + " " * 15 + "Human Models")
+    print("=" * (15 + 25 * len(human_grids)))
+    
+    for i in range(robot_grid.size):
+        robot_row = ""
+        human_rows = [""] * len(human_grids)
+        
+        for j in range(robot_grid.size):
+            # Robot grid cell
+            if (i, j) == robot_grid.start_pos:
+                robot_row += '🟥'
+            elif (i, j) == robot_grid.goal_pos:
+                robot_row += '🟩'
+            elif ((i, j), (), ()) in robot_bottlenecks and (i, j) != robot_grid.goal_pos:
+                robot_row += '🔵'
+            else:
+                robot_row += symbols[robot_grid.map[i, j]]
+            
+            # Human grid cells
+            for k, (human_grid, human_bottlenecks, achievable_bottlenecks) in enumerate(zip(human_grids, human_bottlenecks_list, achievable_bottlenecks_list)):
+                if (i, j) == human_grid.start_pos:
+                    human_rows[k] += '🟥'
+                elif (i, j) == human_grid.goal_pos:
+                    human_rows[k] += '🟩'
+                elif ((i, j), (), ()) in human_bottlenecks and (i, j) != human_grid.goal_pos:
+                    if ((i, j), (), ()) in achievable_bottlenecks:
+                        human_rows[k] += '🟢'
+                    else:
+                        human_rows[k] += '🔴'
+                else:
+                    human_rows[k] += symbols[human_grid.map[i, j]]
+        
+        print(f"{robot_row}    " + "    ".join(human_rows))
+    
+    print("\nLegend:")
+    print("🟥 Start")
+    print("🟩 Goal")
+    print("⬛ Obstacle")
+    print("🔵 Robot Bottleneck")
+    print("🟢 Achievable Human Bottleneck")
+    print("🔴 Unachievable Human Bottleneck")
+    print("⬜ Empty Cell")
 
 def visualize_grid(grid):
     symbols = {
@@ -353,7 +405,6 @@ def visualize_grid(grid):
             else:
                 print(symbols[grid.map[i, j]], end='')
         print()
-
 
 if __name__ == "__main__":
     grid = GridWorld(start=(0,0), goal=(4, 4), size=5, obstacles_percent=0, discount=0.99)
@@ -379,8 +430,3 @@ if __name__ == "__main__":
 #     print("Grid:")
 #     visualize_grid(no_path_grid)
 #     no_path_grid.check_for_path()
-
-
-
-
-
