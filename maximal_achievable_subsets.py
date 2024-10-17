@@ -88,7 +88,7 @@ def identify_bottlenecks(M):
     for state in det_mdp.get_state_space():
         if state != M.get_init_state() and state != M.get_goal_states()[0]:
             det_mdp.bottleneck_state = det_mdp.get_state_hash(state)
-            V = vectorized_value_iteration(det_mdp)
+            V = robust_vectorized_value_iteration(det_mdp)
             if V[init_state_hash] <= 0:
                 bottlenecks.append(tuple(state))  # Convert state to tuple
                 print(f"Identified bottleneck state: {tuple(state)}")
@@ -97,11 +97,11 @@ def identify_bottlenecks(M):
 
 def check_achievability(I_prime, M_R):
     M = BottleneckMDP(M_R, I_prime)
-    V = robust_vectorized_value_iteration(M)
+    V = vectorized_value_iteration(M)
     # for s in M.state_space:
     #    print(s, V[M.get_state_hash(s)])
     # exit(0)
-    policy = get_robust_policy(M, V)
+    policy = get_policy(M, V)
 
     M.reward_func = None
     # Determinized for the policy
@@ -110,7 +110,7 @@ def check_achievability(I_prime, M_R):
 
     det_mdp_for_policy.reward_func = det_mdp_for_policy.reward_function_for_avoiding_all_bottleneck
 
-    V = vectorized_value_iteration(det_mdp_for_policy)
+    V = robust_vectorized_value_iteration(det_mdp_for_policy)
     initial_state_hash = det_mdp_for_policy.get_state_hash(det_mdp_for_policy.get_init_state())
     # print(policy)
     is_achievable = False
@@ -178,4 +178,3 @@ if __name__ == "__main__":
         print("\nAll bottleneck states:", B)
     else:
         print("Could not generate valid models for analysis.")
-
