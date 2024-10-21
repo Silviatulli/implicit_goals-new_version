@@ -1,5 +1,6 @@
 from itertools import chain, combinations
 import numpy as np
+import time
 
 def powerset(iterable):
     s = list(iterable)
@@ -8,6 +9,7 @@ def powerset(iterable):
 def ValueIteration(mdp, epsilon=0.001):
     V = {mdp.get_state_hash(s): 0 for s in mdp.get_state_space()}
     # print(mdp.discount)
+    #print(len(mdp.get_state_space()))
     while True:
         delta = 0
         for s in mdp.get_state_space():
@@ -43,7 +45,13 @@ def get_policy(mdp, V):
 def vectorized_value_iteration(mdp, epsilon=0.001, max_iterations=1000):
     # Initialize value function
     V = {mdp.get_state_hash(s): 0 for s in mdp.get_state_space()}
+    #print ("MDP type", type(mdp))
+    #print ("size", len(mdp.get_state_space()))
     states = list(mdp.get_state_space())
+    # if len(states) > 10000:
+    #     for st in states:
+    #         print(st)
+
     n_states = len(states)
     n_actions = len(mdp.get_actions())
     
@@ -119,16 +127,18 @@ def optimized_value_iteration(mdp, epsilon=1e-6, max_iterations=1000):
         V = V_new
     return V
 
-def robust_vectorized_value_iteration(mdp, epsilon=1e-6, max_iterations=1000):
+def robust_vectorized_value_iteration(mdp, epsilon=0.01, max_iterations=1000):
     # Initialize value function
     V = {mdp.get_state_hash(s): 0 for s in mdp.get_state_space()}
     states = list(mdp.get_state_space())
     n_states = len(states)
     n_actions = len(mdp.get_actions())
     
-    #print(f"Number of states: {n_states}")
-    #print(f"Number of actions: {n_actions}")
-    
+    # print(f"Number of states: {n_states}")
+    # print(f"Number of actions: {n_actions}")
+    # print ("MDP type", type(mdp))
+    # print ("size", len(mdp.get_state_space()))
+
     if n_states == 0:
         raise ValueError("The MDP has no states.")
     if n_actions == 0:
@@ -140,13 +150,16 @@ def robust_vectorized_value_iteration(mdp, epsilon=1e-6, max_iterations=1000):
     # Pre-compute transition probabilities and rewards
     P = np.zeros((n_states, n_actions, n_states))
     R = np.zeros((n_states, n_actions, n_states))
-    
+
+    #print ("Creating the matrix")
+    start_time = time.time()
     for i, s in enumerate(states):
         for a_idx, a in enumerate(mdp.get_actions()):
             for j, s_next in enumerate(states):
                 P[i, a_idx, j] = mdp.get_transition_probability(s, a, s_next)
                 R[i, a_idx, j] = mdp.get_reward(s, a, s_next)
-    
+
+   # print ("Matrix created", time.time() - start_time)
     #print(f"Shape of P: {P.shape}")
     #print(f"Shape of R: {R.shape}")
     
@@ -156,6 +169,7 @@ def robust_vectorized_value_iteration(mdp, epsilon=1e-6, max_iterations=1000):
     V_array = np.zeros(n_states)
     
     for iteration in range(max_iterations):
+        #print("iteration", iteration)
         V_prev = V_array.copy()
         
         # Vectorized Bellman update

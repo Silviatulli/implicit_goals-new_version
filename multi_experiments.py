@@ -102,7 +102,7 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
 
         if world_type == 'grid':
             M_R = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                   obstacles_percent=0.1, divide_rooms=True, 
+                                                   obstacles_percent=0.1, divide_rooms=False,
                                                    model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
         elif world_type == 'puddle':
             M_R = generate_and_visualize_puddleworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
@@ -175,6 +175,7 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
     
         print("Starting value iteration...")
         V = robust_vectorized_value_iteration(query_mdp)
+        #V = vectorized_value_iteration(query_mdp)
         print("Value iteration completed. Extracting policy...")
         policy = get_robust_policy(query_mdp, V)
         print("Policy extracted. Simulating policy...")

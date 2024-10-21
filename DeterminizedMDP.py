@@ -21,6 +21,7 @@ class DeterminizedMDP(MDP):
         self.original_reward_func = mdp.reward_func
         self.goal_states = [self.get_state_hash(state) for state in mdp.get_goal_states()]
         self.discount = mdp.discount
+        self.bottleneck_states = []
     def create_determinized_transition_matrix(self):
         all_states = self.state_space
         action_prefix = 'act_'
@@ -84,6 +85,15 @@ class DeterminizedMDP(MDP):
 
     def reward_function_for_avoiding_all_bottleneck(self, state, action, next_state):
         return -1* self.bottleneck_MDP.get_reward(state, action, next_state)
+
+    def reward_function_for_goingthrough_all_bottleneck(self, state, action, next_state):
+        #print(state[0], self.bottleneck_states)
+        #print(state[0] in self.bottleneck_states)
+
+        #rew = self.bottleneck_MDP.get_reward(state, action, next_state)
+        if next_state[0] in self.bottleneck_states:
+            return 1000
+        return 0
 
 
 # if __name__ == "__main__":

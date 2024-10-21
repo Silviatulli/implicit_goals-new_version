@@ -8,6 +8,7 @@ from DeterminizedMDP import DeterminizedMDP
 from collections import deque
 from typing import Set, Tuple, List, FrozenSet
 import functools
+import time
 
 def optimized_find_maximally_achievable_subsets(M_R: GridWorld, M_H_list: List[GridWorld]) -> Tuple[Set[FrozenSet], Set[Tuple]]:
     # Identify all bottleneck states
@@ -96,6 +97,27 @@ def identify_bottlenecks(M):
     return bottlenecks
 
 def check_achievability(I_prime, M_R):
+    print("Making the object")
+    start_time = time.time()
+    print("Time to make the bottleneck object", time.time() - start_time)
+    M_R.reward_func = None
+    start_time = time.time()
+    det_mdp = DeterminizedMDP(M_R)
+    print("Time to make the determinized object", time.time() - start_time)
+
+    det_mdp.reward_func = det_mdp.reward_function_for_goingthrough_all_bottleneck
+    det_mdp.bottleneck_states = I_prime
+    print(I_prime)
+
+    start_time = time.time()
+    V_det = vectorized_value_iteration(det_mdp)
+    print("Time to run the value iteration", time.time() - start_time)
+    initial_state_hash = det_mdp.get_state_hash(det_mdp.get_init_state())
+    # print(policy)
+    #is_achievable = False
+    if V_det[initial_state_hash] <= (len(I_prime)-1)*1000:
+        print("Rejecting it because all of the bottlenecks are not achieved")
+        return False
     M = BottleneckMDP(M_R, I_prime)
     V = vectorized_value_iteration(M)
     # for s in M.state_space:
