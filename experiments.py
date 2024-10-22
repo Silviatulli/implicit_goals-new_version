@@ -3,11 +3,10 @@ from RockWorldClass import RockWorld
 from TaxiWorldClass import TaxiWorld
 from MinigridWorldClass import UnlockEnv, UnlockPickupEnv
 from GridWorldClass import generate_and_visualize_gridworld
-from DeterminizedMDP import identify_bottlenecks
 from BottleneckCheckMDP import BottleneckMDP
 from QueryMDP import QueryMDP, simulate_policy
-from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_robust_policy, robust_vectorized_value_iteration
-from maximal_achievable_subsets import find_maximally_achievable_subsets, optimized_find_maximally_achievable_subsets
+from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_sparse_policy
+from maximal_achievable_subsets import find_maximally_achievable_subsets, optimized_find_maximally_achievable_subsets, identify_bottlenecks
 import numpy as np
 import time
 import random
@@ -102,7 +101,7 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
 
         if world_type == 'grid':
             M_R = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
-                                                   obstacles_percent=0.1, divide_rooms=False,
+                                                   obstacles_percent=0.1, divide_rooms=True, 
                                                    model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
         elif world_type == 'puddle':
             M_R = generate_and_visualize_puddleworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
@@ -174,10 +173,9 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
         query_mdp = QueryMDP(robot_det_model, list(B), list(I))
     
         print("Starting value iteration...")
-        V = robust_vectorized_value_iteration(query_mdp)
-        #V = vectorized_value_iteration(query_mdp)
+        V = vectorized_value_iteration(query_mdp)
         print("Value iteration completed. Extracting policy...")
-        policy = get_robust_policy(query_mdp, V)
+        policy = get_policy(query_mdp, V)
         print("Policy extracted. Simulating policy...")
     
         query_count = simulate_policy(query_mdp, list(B), query_threshold)
@@ -207,9 +205,9 @@ def print_results(results, num_runs, num_models, grid_size, world_type):
             print(f"{metric}: {np.mean(values):.2f} ± {np.std(values):.2f}")
 
 if __name__ == "__main__":
-    num_runs = 1
+    num_runs = 10
     num_models = 3
-    grid_size = 5
+    grid_size = 4
     query_threshold = 1000 
     
     world_types = ['grid', 'puddle', 'rock']
