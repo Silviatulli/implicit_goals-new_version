@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
 
 
-    from GridWorldClass_copy import generate_and_visualize_gridworld, visualize_grids_with_bottlenecks
+    from GridWorldClass import generate_and_visualize_gridworld, visualize_grids_with_bottlenecks
     from DeterminizedMDP import identify_bottlenecks
 
     # Generate Robot Model
