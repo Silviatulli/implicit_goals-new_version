@@ -5,12 +5,13 @@ from MinigridWorldClass import UnlockEnv, UnlockPickupEnv
 from GridWorldClass import generate_and_visualize_gridworld
 from BottleneckCheckMDP import BottleneckMDP
 from QueryMDP import QueryMDP, simulate_policy
-from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_sparse_policy
+from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_sparse_policy, debug_value_iteration
 from maximal_achievable_subsets import find_maximally_achievable_subsets, optimized_find_maximally_achievable_subsets, identify_bottlenecks
 import numpy as np
 import time
 import random
 from DeterminizedMDP import DeterminizedMDP
+import pandas as pd
 
 
 def visualize_taxiworld(taxi_world):
@@ -64,7 +65,7 @@ def generate_and_visualize_taxiworld(size, start, goal, obstacles_percent, model
         obstacle_seed=obstacle_seed
     )
     
-    # Visualize the world (optional)
+    # visualize the world (optional)
     print(f"\n{model_type}:")
     visualize_taxiworld(taxi_world)
     
@@ -84,15 +85,16 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
         "human_bottlenecks": [],
         "maximal_subset_times": [],
         "query_times": [],
-        "state_space_sizes": [],
-        "action_space_sizes": []
+        "query_mdp_state_space_sizes": [],
+        "query_mdp_action_space_sizes": [],
+        "initial_mdp_state_space_sizes": [],
+        "initial_mdp_action_space_sizes": []
     }
 
     for run in range(num_runs):
-        print(f"Starting run {run + 1}/{num_runs}")
+        print(f"\nStarting run {run + 1}/{num_runs}")
         start_time_total = time.time()
 
-        # Generate robot model
         print("Generating robot model...")
         if world_type == 'taxi':
             M_R = generate_and_visualize_taxiworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
@@ -118,7 +120,10 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
         else:
             raise ValueError(f"Unknown world type: {world_type}")
 
-        # Generate human models
+
+        results["initial_mdp_state_space_sizes"].append(len(M_R.state_space))
+        results["initial_mdp_action_space_sizes"].append(len(M_R.get_actions()))
+
         print("Generating human models...")
         M_H_list = []
         for i in range(num_models):
@@ -158,62 +163,127 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
 
         robot_det_model = DeterminizedMDP(M_R)
 
-        # Find maximally achievable subsets
+        # find maximally achievable subsets
         print("Finding maximally achievable subsets...")
         start_time_maximal = time.time()
         I, B = find_maximally_achievable_subsets(M_R, M_H_list)
         maximal_subset_time = time.time() - start_time_maximal
         results["maximal_subset_times"].append(maximal_subset_time)
         print(f"Maximally achievable subsets found in {maximal_subset_time:.2f} seconds")
+        
+        # record number of bottlenecks found
+        num_bottlenecks = len(B)
+        results["human_bottlenecks"].append(num_bottlenecks)
+        print(f"Number of bottlenecks found: {num_bottlenecks}")
 
-        results["human_bottlenecks"].append(len(B))
+        # handle case with no bottlenecks
+        if num_bottlenecks == 0:
+            print("No bottlenecks found - recording zero queries needed")
+            results["query_counts"].append(0)
+            results["query_times"].append(0)
+            results["query_mdp_state_space_sizes"].append(0)
+            results["query_mdp_action_space_sizes"].append(0)
+            print(f"Run {run + 1} completed in {time.time() - start_time_total:.2f} seconds")
+            continue
 
+        # only run query MDP if there are bottlenecks
         print("Running query MDP...")
         start_time = time.time()
-        query_mdp = QueryMDP(robot_det_model, list(B), list(I))
-    
-        print("Starting value iteration...")
-        V = vectorized_value_iteration(query_mdp)
-        print("Value iteration completed. Extracting policy...")
-        policy = get_policy(query_mdp, V)
-        print("Policy extracted. Simulating policy...")
-    
-        query_count = simulate_policy(query_mdp, list(B), query_threshold)
-        query_time = time.time() - start_time
-        results["query_times"].append(query_time)
-        print(f"Query MDP completed in {query_time:.2f} seconds")
-
-        results["query_counts"].append(query_count)
-        results["state_space_sizes"].append(len(M_R.state_space))
-        results["action_space_sizes"].append(len(M_R.get_actions()))
+        try:
+            query_mdp = QueryMDP(M_R, list(B), list(I))
+            query_count = simulate_policy(query_mdp, list(B), query_threshold)
+            query_time = time.time() - start_time
+            
+            results["query_times"].append(query_time)
+            results["query_counts"].append(query_count)
+            results["query_mdp_state_space_sizes"].append(len(query_mdp.state_space))
+            results["query_mdp_action_space_sizes"].append(len(query_mdp.get_actions()))
+            
+            print(f"Query MDP completed in {query_time:.2f} seconds")
+        except Exception as e:
+            print(f"Error during query MDP: {e}")
+            # Record zeros for this run if there's an error
+            results["query_counts"].append(0)
+            results["query_times"].append(0)
+            results["query_mdp_state_space_sizes"].append(0)
+            results["query_mdp_action_space_sizes"].append(0)
 
         print(f"Run {run + 1} completed in {time.time() - start_time_total:.2f} seconds")
 
     return results
 
-def print_results(results, num_runs, num_models, grid_size, world_type):
-    print("\nExperiment Results:")
-    print(f"World Type: {world_type}")
-    print(f"Number of runs: {num_runs}")
-    print(f"Number of human models: {num_models}")
-    print(f"Grid size: {grid_size}x{grid_size}")
+def print_results(all_results, num_runs, num_models, grid_size):
+    if not all_results:
+        print("\nno results to display - all runs failed.")
+        return
+        
+    print("\n# Experiment Config")
+    print(f"- Num runs: {num_runs}")
+    print(f"- Num human models: {num_models}")
+    print(f"- Grid size: {grid_size}x{grid_size}")
     
-    for metric, values in results.items():
-        if metric in ["state_space_sizes", "action_space_sizes"]:
-            print(f"{metric}: {np.mean(values):.2f} ± {np.std(values):.2f}")
-        else:
-            print(f"{metric}: {np.mean(values):.2f} ± {np.std(values):.2f}")
+    metrics = [
+        'Query Count',
+        'Human Bottlenecks',
+        'Maximal Subset Time (s)',
+        'Query Time (s)',
+        'Initial MDP State Space Size',
+        'Initial MDP Action Space Size',
+        'Query MDP State Space Size',
+        'Query MDP Action Space Size'
+    ]
+    
+    results_dict = {}
+    
+    for world_type, results in all_results.items():
+        world_results = {}
+        for metric, values in results.items():
+            if not values:  
+                world_results[metric] = 'N/A'
+                continue
+            values_array = np.array(values)
+            world_results[metric] = np.mean(values_array)
+            
+        results_dict[world_type.capitalize() + 'World'] = {
+            'Query Count': world_results['query_counts'],
+            'Human Bottlenecks': world_results['human_bottlenecks'],
+            'Maximal Subset Time (s)': world_results['maximal_subset_times'],
+            'Query Time (s)': world_results['query_times'],
+            'Initial MDP State Space Size': world_results['initial_mdp_state_space_sizes'],
+            'Initial MDP Action Space Size': world_results['initial_mdp_action_space_sizes'],
+            'Query MDP State Space Size': world_results['query_mdp_state_space_sizes'],
+            'Query MDP Action Space Size': world_results['query_mdp_action_space_sizes']
+        }
+    
+    df = pd.DataFrame(results_dict)
+    
+    print("\n## Results Summary Table")
+    print(df.to_markdown())
 
-if __name__ == "__main__":
-    num_runs = 10
-    num_models = 3
-    grid_size = 4
-    query_threshold = 1000 
-    
+    print("\n## CSV Format")
+    print(df.to_csv())
+
+def run_all_experiments(num_runs, num_models, grid_size, query_threshold):
+    """Run experiments for all world types and collect results"""
     world_types = ['grid', 'puddle', 'rock']
-    # 'minigrid_unlock', 'minigrid_unlock_pickup']
+    all_results = {}
     
     for world_type in world_types:
         print(f"\nStarting experiments for {world_type.capitalize()}World...")
         results = run_experiments(num_runs, num_models, grid_size, world_type, query_threshold)
-        print_results(results, num_runs, num_models, grid_size, world_type)
+        all_results[world_type] = results
+    
+    return all_results
+
+if __name__ == "__main__":
+    # experiment parameters
+    num_runs = 10
+    num_models = 10
+    grid_size = 5
+    query_threshold = 1000
+    
+    # run experiments and collect all results
+    all_results = run_all_experiments(num_runs, num_models, grid_size, query_threshold)
+    
+    # print synthetic results
+    print_results(all_results, num_runs, num_models, grid_size)
