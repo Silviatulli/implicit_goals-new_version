@@ -2,15 +2,35 @@ from typing import List, Tuple, Any, Set
 from itertools import combinations
 from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_sparse_policy
 
+
 class QueryMDP:
     def __init__(self, robot_mdp: Any, bottlenecks: List[Any], achievable_subsets: List[Any]):
         self.robot_mdp = robot_mdp
-        self.achievable_subsets = [set(robot_mdp.get_state_hash(state) for state in achievable_subset)
-                                   for achievable_subset in achievable_subsets]
-        self.union_achievable_subsets = set().union(*self.achievable_subsets)
-        self.bottleneck_hash = set(robot_mdp.get_state_hash(state) for state in bottlenecks)
-        self.unachievable_bottlenecks = self.bottleneck_hash - self.union_achievable_subsets
-        self.bottleneck_hash_map = {robot_mdp.get_state_hash(state): state for state in bottlenecks}
+        
+        # Convert human bottlenecks to hash sets - these are from identify_bottlenecks()
+        self.human_bottlenecks = set(robot_mdp.get_state_hash(state) for state in bottlenecks)
+        
+        # Convert achievable subsets to sets of state hashes
+        # These are from check_bottleneck_achievability()
+        self.achievable_subsets = [set(robot_mdp.get_state_hash(state) for state in subset)
+                                 for subset in achievable_subsets]
+        
+        # Print debug information
+        print("Number of human bottlenecks:", len(self.human_bottlenecks))
+        print("Human bottlenecks:", self.human_bottlenecks)
+        print("Number of achievable subsets:", len(self.achievable_subsets))
+        print("Achievable subsets:", self.achievable_subsets)
+        
+        # Achievable bottlenecks are the human bottlenecks that appear in achievable_subsets
+        self.achievable_bottlenecks = self.human_bottlenecks.intersection(
+            set().union(*self.achievable_subsets) if self.achievable_subsets else set()
+        )
+        
+        print("Number of achievable bottlenecks:", len(self.achievable_bottlenecks))
+        print("Achievable bottlenecks:", self.achievable_bottlenecks)
+        
+        self.bottleneck_hash_map = {robot_mdp.get_state_hash(state): state 
+                                   for state in bottlenecks}
         
         self.state_space = []
         self.action_space = []
@@ -23,20 +43,28 @@ class QueryMDP:
 
     def create_state_space(self):
         self.state_space = []
-        bottleneck_list = list(self.bottleneck_hash)
+        bottleneck_list = list(self.achievable_bottlenecks)
+        
+        # Debug print
+        print(f"Creating state space from {len(bottleneck_list)} achievable bottlenecks")
         
         for i in range(len(bottleneck_list) + 1):
             for subgoal_combo in combinations(bottleneck_list, i):
                 subgoal_set = frozenset(subgoal_combo)
-                remaining_bottlenecks = self.bottleneck_hash - set(subgoal_combo)
+                remaining_bottlenecks = self.achievable_bottlenecks - set(subgoal_combo)
                 
                 for j in range(len(remaining_bottlenecks) + 1):
                     for non_subgoal_combo in combinations(remaining_bottlenecks, j):
                         non_subgoal_set = frozenset(non_subgoal_combo)
                         self.state_space.append((subgoal_set, non_subgoal_set))
+        
+        # Debug print
+        print(f"Created state space with {len(self.state_space)} states")
 
     def create_action_space(self):
-        self.action_space = ['Query_' + state for state in self.bottleneck_hash]
+        # Only create query actions for achievable bottlenecks
+        self.action_space = ['Query_' + state for state in self.achievable_bottlenecks]
+        print(f"Created action space with {len(self.action_space)} actions")
 
     def get_state_space(self):
         return self.state_space
@@ -46,14 +74,11 @@ class QueryMDP:
 
     def check_terminal_state(self, state: Tuple[Set[Any], Set[Any]]) -> bool:
         subgoal, not_subgoal = map(frozenset, state)
+        classified_states = subgoal | not_subgoal
         
-        if not self.unachievable_bottlenecks.isdisjoint(subgoal):
-            return True
-            
-        possible_subgoals = self.bottleneck_hash - not_subgoal
-        
-        return any(achievable_subset.issuperset(possible_subgoals) 
-                  for achievable_subset in self.achievable_subsets)
+        # A state is terminal if we've determined whether all achievable bottlenecks 
+        # are subgoals or not
+        return classified_states.issuperset(self.achievable_bottlenecks)
 
     def get_transition_probability(self, state: Tuple[Set[Any], Set[Any]], action: str, 
                                  next_state: Tuple[Set[Any], Set[Any]]) -> float:
