@@ -1,21 +1,25 @@
 from typing import List, Tuple, Any, Set
 from itertools import combinations
 from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_sparse_policy
-
+import time
 class QueryMDP:
     def __init__(self, robot_mdp: Any, bottlenecks: List[Any], achievable_subsets: List[Any]):
         self.robot_mdp = robot_mdp
         self.achievable_subsets = [set(robot_mdp.get_state_hash(state) for state in achievable_subset)
                                    for achievable_subset in achievable_subsets]
         self.union_achievable_subsets = set().union(*self.achievable_subsets)
+
+        print("Union Achievable Subsets:", self.union_achievable_subsets)
+
         self.bottleneck_hash = set(robot_mdp.get_state_hash(state) for state in bottlenecks)
         self.unachievable_bottlenecks = self.bottleneck_hash - self.union_achievable_subsets
         self.bottleneck_hash_map = {robot_mdp.get_state_hash(state): state for state in bottlenecks}
-        
+
         self.state_space = []
         self.action_space = []
         
         self.create_state_space()
+        print("State Space:", self.state_space)
         self.create_action_space()
         
         self.start_state = (frozenset(), frozenset())
@@ -23,12 +27,12 @@ class QueryMDP:
 
     def create_state_space(self):
         self.state_space = []
-        bottleneck_list = list(self.bottleneck_hash)
+        bottleneck_list = list(self.union_achievable_subsets)
         
         for i in range(len(bottleneck_list) + 1):
             for subgoal_combo in combinations(bottleneck_list, i):
                 subgoal_set = frozenset(subgoal_combo)
-                remaining_bottlenecks = self.bottleneck_hash - set(subgoal_combo)
+                remaining_bottlenecks = self.union_achievable_subsets - set(subgoal_combo)
                 
                 for j in range(len(remaining_bottlenecks) + 1):
                     for non_subgoal_combo in combinations(remaining_bottlenecks, j):
@@ -90,8 +94,12 @@ def simulate_policy(query_mdp: QueryMDP, true_bottlenecks: List[Any], query_thre
                                    for state in true_bottlenecks)
     true_bottleneck_hash = frozenset(query_mdp.robot_mdp.get_state_hash(state) 
                                    for state in true_bottlenecks)
+    start_value_iteration_time = time.time()
     V = sparse_value_iteration(query_mdp)
+    print(f"Value iteration took {time.time() - start_value_iteration_time} seconds")
+    start_policy_time = time.time()
     policy = get_sparse_policy(query_mdp, V)
+    print(f"Policy generation took {time.time() - start_policy_time} seconds")
     current_state = list(query_mdp.get_init_state())
     
     for count in range(query_threshold):

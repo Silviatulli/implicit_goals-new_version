@@ -3,6 +3,7 @@ import numpy as np
 from typing import Any, Dict, List, Tuple
 from scipy.sparse import csr_matrix, lil_matrix
 import warnings
+import time
 
 
 def powerset(iterable):
@@ -299,14 +300,15 @@ def sparse_value_iteration(mdp: Any, max_iterations: int = 1000, epsilon: float 
     actions = mdp.get_actions()
     n_states = len(states)
     n_actions = len(actions)
-    
+
+    print("Number of states", str(n_states))
     # Create state index mapping
     state_to_idx = {mdp.get_state_hash(state): idx for idx, state in enumerate(states)}
     
     # Initialize sparse transition matrices and reward vectors for each action
     P_sparse = []
     R = np.zeros((n_states, n_actions))
-    
+    start_time = time.time()
     # Build sparse matrices action by action to save memory
     for a_idx, action in enumerate(actions):
         # Use lil_matrix for efficient construction
@@ -323,8 +325,10 @@ def sparse_value_iteration(mdp: Any, max_iterations: int = 1000, epsilon: float 
         
         # Convert to CSR format for efficient operations
         P_sparse.append(P_a.tocsr())
-    
+    print (f"Time to build the sparse matrix: {time.time() - start_time}")
+
     # Value iteration
+    start_time = time.time()
     V = np.zeros(n_states)
     for _ in range(max_iterations):
         V_old = V.copy()
@@ -340,7 +344,7 @@ def sparse_value_iteration(mdp: Any, max_iterations: int = 1000, epsilon: float 
         # Check convergence
         if np.max(np.abs(V - V_old)) < epsilon:
             break
-    
+    print(f"Time to run value iteration: {time.time() - start_time}")
     return V
 
 def get_sparse_policy(mdp: Any, V: np.ndarray) -> Dict[str, str]:
