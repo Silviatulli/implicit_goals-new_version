@@ -5,7 +5,7 @@ from MinigridWorldClass import UnlockEnv, UnlockPickupEnv
 from GridWorldClass import generate_and_visualize_gridworld
 from BottleneckCheckMDP import BottleneckMDP
 from QueryMDP import QueryMDP, simulate_policy
-from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_sparse_policy
+from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration
 from maximal_achievable_subsets import find_maximally_achievable_subsets, optimized_find_maximally_achievable_subsets, identify_bottlenecks
 import numpy as np
 import time
@@ -212,6 +212,8 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
 
     return results
 
+
+
 def print_results(all_results, num_runs, num_models, grid_size):
     if not all_results:
         print("\nno results to display - all runs failed.")
@@ -257,8 +259,8 @@ def print_results(all_results, num_runs, num_models, grid_size):
     
     df = pd.DataFrame(results_dict)
     
-    print("\n## Results Summary Table")
-    print(df.to_markdown())
+    #print("\n## Results Summary Table")
+    #print(df.to_markdown())
 
     print("\n## CSV Format")
     print(df.to_csv())
@@ -277,8 +279,8 @@ def run_all_experiments(num_runs, num_models, grid_size, query_threshold):
 
 if __name__ == "__main__":
     # experiment parameters
-    num_runs = 10
-    num_models = 10
+    num_runs = 3
+    num_models = 5
     grid_size = 5
     query_threshold = 1000
     
