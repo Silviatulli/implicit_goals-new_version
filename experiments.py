@@ -4,7 +4,7 @@ from TaxiWorldClass import TaxiWorld
 from MinigridWorldClass import UnlockEnv, UnlockPickupEnv
 from GridWorldClass import generate_and_visualize_gridworld
 from BottleneckCheckMDP import BottleneckMDP
-from QueryMDP import QueryMDP, simulate_policy
+from QueryMDP import QueryMDP, simulate_policy, simulate_policy_unachievable
 from Utils import vectorized_value_iteration, get_policy, sparse_value_iteration, get_sparse_policy #, debug_value_iteration
 from maximal_achievable_subsets import find_maximally_achievable_subsets, optimized_find_maximally_achievable_subsets, identify_bottlenecks
 import numpy as np
@@ -193,7 +193,7 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
             query_mdp = QueryMDP(M_R, list(B), list(I))
             print("Time taken to build query MDP: ", time.time() - start_time)
             simulate_start_time = time.time()
-            query_count = simulate_policy(query_mdp, list(B), query_threshold)
+            query_count = simulate_policy_unachievable(query_mdp, list(B), query_threshold)
             print("Time taken to simulate policy: ", time.time() - simulate_start_time)
             query_time = time.time() - start_time
             
@@ -280,7 +280,7 @@ def run_all_experiments(num_runs, num_models, grid_size, query_threshold):
 
 if __name__ == "__main__":
     # experiment parameters
-    num_runs = 10
+    num_runs = 5
     num_models = 10
     grid_size = 5
     query_threshold = 1000
