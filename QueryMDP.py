@@ -120,6 +120,60 @@ def simulate_policy(query_mdp: QueryMDP, true_bottlenecks: List[Any], query_thre
     print(f"did not reach terminal state after {query_threshold} queries")
     return query_threshold
 
+
+def simulate_policy_unachievable(query_mdp: QueryMDP, human_bottlenecks: List[Any], query_threshold: int = 1000) -> int:
+
+    human_bottleneck_hash = frozenset(query_mdp.robot_mdp.get_state_hash(state) 
+                                    for state in human_bottlenecks)
+    query_count = 0
+    
+    # query each unachievable bottleneck to check if it's necessary for the human
+    for unachievable in query_mdp.unachievable_bottlenecks:
+        if query_count >= query_threshold:
+            print(f"Query threshold {query_threshold} reached during unachievable bottleneck checks")
+            return query_threshold
+            
+        # query human to see if this unachievable bottleneck is their subgoal
+        is_human_subgoal = unachievable in human_bottleneck_hash
+        query_count += 1
+        
+        if is_human_subgoal:
+            # found an unachievable bottleneck that is necessary for human - implicit goal
+            print(f"Found implicit goal: bottleneck that human needs but the robot can't reach")
+            return query_count
+    
+    # if we get here, any unachievable bottlenecks weren't human subgoals
+    # run normal policy to identify remaining bottlenecks
+    start_value_iteration_time = time.time()
+    V = sparse_value_iteration(query_mdp)
+    print(f"Value iteration took {time.time() - start_value_iteration_time} seconds")
+    
+    start_policy_time = time.time()
+    policy = get_sparse_policy(query_mdp, V)
+    print(f"Policy generation took {time.time() - start_policy_time} seconds")
+    
+    current_state = list(query_mdp.get_init_state())
+    
+    while query_count < query_threshold:
+        action = policy[query_mdp.get_state_hash(tuple(current_state))]
+        query_state = action.split('_')[-1]
+        
+        # query if this state is a human subgoal
+        is_subgoal = query_state in human_bottleneck_hash
+        if is_subgoal:
+            current_state[0] = frozenset(current_state[0] | {query_state})
+        else:
+            current_state[1] = frozenset(current_state[1] | {query_state})
+        
+        query_count += 1
+            
+        if query_mdp.check_terminal_state(tuple(current_state)):
+            print(f"Identified all necessary bottlenecks after {query_count} queries")
+            return query_count
+            
+    print(f"Did not complete bottleneck identification within {query_threshold} queries")
+    return query_threshold
+
 def test_query_mdp(size=5, obstacles_percent=0.1):
     """Test function for QueryMDP."""
     from GridWorldClass import generate_and_visualize_gridworld
@@ -146,7 +200,7 @@ def test_query_mdp(size=5, obstacles_percent=0.1):
         achievable_subsets=test_case['achievable_subsets']
     )
 
-    return simulate_policy(query_mdp, test_case['true_bottlenecks'])
+    return simulate_policy_unachievable(query_mdp, test_case['true_bottlenecks'])
 
 if __name__ == "__main__":
     test_query_mdp(size=5, obstacles_percent=0.1)
