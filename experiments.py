@@ -103,6 +103,10 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
 
         if world_type == 'grid':
             M_R = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
+                                                   obstacles_percent=0.1, divide_rooms=False, 
+                                                   model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
+        elif world_type == 'four_rooms':
+            M_R = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
                                                    obstacles_percent=0.1, divide_rooms=True, 
                                                    model_type="Robot Model", obstacle_seed=random.randint(1, 10000))
         elif world_type == 'puddle':
@@ -128,6 +132,11 @@ def run_experiments(num_runs, num_models, grid_size, world_type, query_threshold
         M_H_list = []
         for i in range(num_models):
             if world_type == 'grid':
+                M_H = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
+                                                       obstacles_percent=0.1, divide_rooms=False, 
+                                                       model_type=f"Human Model {i+1}", 
+                                                       obstacle_seed=random.randint(1, 10000))
+            elif world_type == 'four_rooms':
                 M_H = generate_and_visualize_gridworld(size=grid_size, start=(0,0), goal=(grid_size-1,grid_size-1), 
                                                        obstacles_percent=0.1, divide_rooms=True, 
                                                        model_type=f"Human Model {i+1}", 
@@ -261,14 +270,17 @@ def print_results(all_results, num_runs, num_models, grid_size):
     df = pd.DataFrame(results_dict)
     
     print("\n## Results Summary Table")
-    print(df.to_markdown())
+    #print(df.to_markdown())
+    #print(df.to_string())
+    print(df)
 
     print("\n## CSV Format")
     print(df.to_csv())
 
 def run_all_experiments(num_runs, num_models, grid_size, query_threshold):
     """Run experiments for all world types and collect results"""
-    world_types = ['grid', 'puddle', 'rock']
+    #world_types = ['grid', 'four_rooms', 'puddle', 'rock']
+    world_types = ['grid']
     all_results = {}
     
     for world_type in world_types:
@@ -281,8 +293,8 @@ def run_all_experiments(num_runs, num_models, grid_size, query_threshold):
 if __name__ == "__main__":
     # experiment parameters
     num_runs = 5
-    num_models = 10
-    grid_size = 5
+    num_models = 100
+    grid_size = 8
     query_threshold = 1000
     
     # run experiments and collect all results
