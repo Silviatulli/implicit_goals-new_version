@@ -174,6 +174,36 @@ def simulate_policy_unachievable(query_mdp: QueryMDP, human_bottlenecks: List[An
     print(f"Did not complete bottleneck identification within {query_threshold} queries")
     return query_threshold
 
+def simulate_policy_query_all(query_mdp: QueryMDP, human_bottlenecks: List[Any], query_threshold: int = 1000) -> int:
+    """
+    Simple baseline strategy that queries all bottleneck states sequentially.
+    """
+    human_bottleneck_hash = frozenset(query_mdp.robot_mdp.get_state_hash(state) 
+                                    for state in human_bottlenecks)
+    query_count = 0
+    confirmed_subgoals = set()
+    confirmed_non_subgoals = set()
+    all_bottlenecks = query_mdp.bottleneck_hash
+    
+    for bottleneck in all_bottlenecks:
+        if query_count >= query_threshold:
+            return query_threshold
+            
+        query_count += 1
+        is_subgoal = bottleneck in human_bottleneck_hash
+        
+        if is_subgoal:
+            confirmed_subgoals.add(bottleneck)
+        else:
+            confirmed_non_subgoals.add(bottleneck)
+            
+        current_state = (frozenset(confirmed_subgoals), frozenset(confirmed_non_subgoals))
+        if query_mdp.check_terminal_state(current_state):
+            print(f"Found all bottlenecks after {query_count} queries")
+            return query_count
+    
+    return query_threshold
+
 def test_query_mdp(size=5, obstacles_percent=0.1):
     """Test function for QueryMDP."""
     from GridWorldClass import generate_and_visualize_gridworld
