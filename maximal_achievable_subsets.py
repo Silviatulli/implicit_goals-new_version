@@ -9,6 +9,12 @@ from collections import deque
 from typing import Set, Tuple, List, FrozenSet
 import functools
 import time
+import inspect  # Add this at the top of the file
+import ProcessPoolExecutor
+
+# Global counters for achievability checks
+achievability_check_count_pruning = 0
+achievability_check_count_no_pruning = 0
 
 def optimized_find_maximally_achievable_subsets(M_R: GridWorld, M_H_list: List[GridWorld]) -> Tuple[Set[FrozenSet], Set[Tuple]]:
     # Identify all bottleneck states
@@ -96,73 +102,156 @@ def identify_bottlenecks(M):
     
     return bottlenecks
 
-def check_achievability(I_prime, M_R):
-    print("Making the object")
-    start_time = time.time()
-    print("Time to make the bottleneck object", time.time() - start_time)
-    M_R.reward_func = None
-    start_time = time.time()
-    det_mdp = DeterminizedMDP(M_R)
-    print("Time to make the determinized object", time.time() - start_time)
+# def check_achievability(I_prime, M_R):
+#     print("Making the object")
+#     start_time = time.time()
+#     print("Time to make the bottleneck object", time.time() - start_time)
+#     M_R.reward_func = None
+#     start_time = time.time()
+#     det_mdp = DeterminizedMDP(M_R)
+#     print("Time to make the determinized object", time.time() - start_time)
 
+#     det_mdp.reward_func = det_mdp.reward_function_for_goingthrough_all_bottleneck
+#     det_mdp.bottleneck_states = I_prime
+#     print(I_prime)
+
+#     start_time = time.time()
+#     V_det = vectorized_value_iteration(det_mdp)
+#     print("Time to run the value iteration", time.time() - start_time)
+#     initial_state_hash = det_mdp.get_state_hash(det_mdp.get_init_state())
+#     # print(policy)
+#     #is_achievable = False
+#     if V_det[initial_state_hash] <= (len(I_prime)-1)*1000:
+#         print("Rejecting it because all of the bottlenecks are not achieved")
+#         return False
+#     M = BottleneckMDP(M_R, I_prime)
+#     V = vectorized_value_iteration(M)
+#     # for s in M.state_space:
+#     #    print(s, V[M.get_state_hash(s)])
+#     # exit(0)
+#     policy = get_policy(M, V)
+
+#     M.reward_func = None
+#     # Determinized for the policy
+#     det_mdp_for_policy = DeterminizedMDP(M, policy)
+#     det_mdp_for_policy.bottleneck_MDP = M
+
+#     det_mdp_for_policy.reward_func = det_mdp_for_policy.reward_function_for_avoiding_all_bottleneck
+
+#     V = robust_vectorized_value_iteration(det_mdp_for_policy)
+#     initial_state_hash = det_mdp_for_policy.get_state_hash(det_mdp_for_policy.get_init_state())
+#     # print(policy)
+#     is_achievable = False
+#     if V[initial_state_hash] <= 0:
+#         is_achievable = True
+#         #print("Achievable")
+#     return is_achievable
+
+
+def check_achievability(I_prime, M_R):
+    """Check if a set of states is achievable in the given MDP."""
+    global achievability_check_count_pruning
+    global achievability_check_count_no_pruning
+    
+    # Identify which function called check_achievability
+    caller = inspect.currentframe().f_back.f_code.co_name
+    if caller == 'find_maximally_achievable_subsets':
+        achievability_check_count_pruning += 1
+    elif caller == 'find_maximally_achievable_subsets_no_pruning':
+        achievability_check_count_no_pruning += 1
+
+    # Original check_achievability implementation
+    M_R.reward_func = None
+    det_mdp = DeterminizedMDP(M_R)
     det_mdp.reward_func = det_mdp.reward_function_for_goingthrough_all_bottleneck
     det_mdp.bottleneck_states = I_prime
-    print(I_prime)
 
-    start_time = time.time()
     V_det = vectorized_value_iteration(det_mdp)
-    print("Time to run the value iteration", time.time() - start_time)
     initial_state_hash = det_mdp.get_state_hash(det_mdp.get_init_state())
-    # print(policy)
-    #is_achievable = False
+
     if V_det[initial_state_hash] <= (len(I_prime)-1)*1000:
-        print("Rejecting it because all of the bottlenecks are not achieved")
         return False
+
     M = BottleneckMDP(M_R, I_prime)
     V = vectorized_value_iteration(M)
-    # for s in M.state_space:
-    #    print(s, V[M.get_state_hash(s)])
-    # exit(0)
     policy = get_policy(M, V)
 
     M.reward_func = None
-    # Determinized for the policy
     det_mdp_for_policy = DeterminizedMDP(M, policy)
     det_mdp_for_policy.bottleneck_MDP = M
-
     det_mdp_for_policy.reward_func = det_mdp_for_policy.reward_function_for_avoiding_all_bottleneck
 
     V = robust_vectorized_value_iteration(det_mdp_for_policy)
     initial_state_hash = det_mdp_for_policy.get_state_hash(det_mdp_for_policy.get_init_state())
-    # print(policy)
-    is_achievable = False
-    if V[initial_state_hash] <= 0:
-        is_achievable = True
-        #print("Achievable")
-    return is_achievable
+
+    return V[initial_state_hash] <= 0
+
+def improved_find_maximally_achievable_subsets(M_R, M_H_list):
+    B = set()
+    for M in M_H_list:
+        B.update(tuple(b) for b in identify_bottlenecks(M))
+    
+    # Start with smaller promising subsets instead of full set
+    fringe = []
+    # Try individual states first
+    for b in B:
+        if check_achievability({b}, M_R):
+            fringe.append(frozenset({b}))
+    
+    I = set()
+    while fringe:
+        I_prime = fringe.pop(0)
+        # Try to grow achievable sets
+        candidates = B - I_prime
+        for c in candidates:
+            new_set = I_prime | {c}
+            if check_achievability(new_set, M_R):
+                fringe.append(new_set)
+            else:
+                if all(not check_achievability(I_prime | {s}, M_R) for s in B - I_prime):
+                    I.add(I_prime)
+    return I, B
 
 
-# if __name__ == "__main__":
-#     # Generate a simple robot model
-#     M_R = GridWorld(size=5, start=(0, 0), goal=(4, 4), obstacles_percent=0.1, divide_rooms=False, slip_prob=0.1)
-#     print("Robot Model:")
-#     visualize_grid(M_R)
-#
-#     # Generate a simple human model
-#     M_H = GridWorld(size=5, start=(0, 0), goal=(4, 4), obstacles_percent=0.1, divide_rooms=True, slip_prob=0.1)
-#     #M_H = generate_and_visualize_gridworld(size=5, start=(0, 0), goal=(4, 4), obstacles_percent=0.1, divide_rooms=True,
-#                                            #model_type=f"Human Model 1")
-#     print("\nHuman Model:")
-#     visualize_grid(M_H)
-#
-#
-#     # Find maximally achievable subsets
-#     I, B = find_maximally_achievable_subsets(M_R, [M_H])
-#
-#     print("\nMaximally achievable subsets of bottleneck states:")
-#     for subset in I:
-#         print(subset)
-#     print("\nAll bottleneck states:", B)
+def binary_search_maximal_subset(current_set, candidates, M_R):
+    if not candidates:
+        return current_set
+    
+    mid = len(candidates) // 2
+    test_set = current_set | set(list(candidates)[:mid])
+    
+    if check_achievability(test_set, M_R):
+        # Try including more states
+        return binary_search_maximal_subset(test_set, set(list(candidates)[mid:]), M_R)
+    else:
+        # Try with fewer states
+        return binary_search_maximal_subset(current_set, set(list(candidates)[:mid]), M_R)
+
+
+def find_maximally_achievable_subsets_no_pruning(M_R, M_H_list):
+    """Exhaustive search version without pruning optimization."""
+    B = set()
+    for M in M_H_list:
+        bottlenecks = identify_bottlenecks(M)
+        B.update(tuple(b) for b in bottlenecks)
+    
+    I = set()
+    n = len(B)
+    B_list = list(B)
+    
+    for i in range(2**n):
+        subset = frozenset(B_list[j] for j in range(n) if (i & (1 << j)))
+        if check_achievability(subset, M_R):
+            is_maximal = True
+            for additional_state in B - subset:
+                larger_subset = subset | {additional_state}
+                if check_achievability(larger_subset, M_R):
+                    is_maximal = False
+                    break
+            if is_maximal:
+                I.add(subset)
+    
+    return I, B
 
 
 if __name__ == "__main__":
